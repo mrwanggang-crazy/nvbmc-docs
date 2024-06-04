@@ -814,6 +814,35 @@ For detaisl can be found in events block of this document.
 ### List of Configuration PDIs of nsmd
 TODO - All Configuration PDIs with their application and type and description of each of its property are to be added in this section.
 
+#### Nvlink Port Configuration in EM Json
+1. To create required number of links of type "Name", add below mentioned configuration in EM json.
+| Configuration Property 	| type   	| Description                                          	            |
+|------------------------	|--------	|-----------------------------------------------------------------	|
+| Type                   	| string 	| NSM_NVLink                                                        |
+| Name                   	| string 	| Name for EM dbus object, which is also used as port dbus object name prefix.           	|
+| ParentObjPath            	| string 	| Dbus object path of the device on which the port objects will be created.                	|
+| DeviceType                | int    	| Device type as per defination in NsmDeviceIdentification enum defined above.              |
+| UUID                      | string  	| UUID of the device.                                               |
+| Priority                  | boolean   | Priority to indicate which queue to add the created sensor for polling.                   |
+| Count                  	| int    	| The total port count on the device.<br>example: if Count=4 and Name="NVPort", then four dbus objects will be created.<br>/xyz/openbmc_project/.../Ports/NVPort_0<br>/xyz/openbmc_project/.../Ports/NVPort_1<br>/xyz/openbmc_project/.../Ports/NVPort_2<br>/xyz/openbmc_project/.../Ports/NVPort_3 	|
+
+Example json snippet:
+```
+    {
+        "Name": "NVLinkManagement",
+        "Type": "NSM_NVLink",
+        "ParentObjPath": "/xyz/openbmc_project/inventory/system/chassis/HGX_NVLinkManagementNIC_0/NetworkAdapters/NVLinkManagementNIC_0",
+        "DeviceType": "$DEVICE_TYPE",
+        "UUID": "$UUID",
+        "Priority": true,
+        "Count": 2
+    }
+```
+2. To add topology details on the created dbus port objects, there is a python script which generates the EM json from a mapping excel sheet.
+More details are added in nsmd repo (nsmd/tools/topology/Readme.md): https://gitlab-master.nvidia.com/dgx/bmc/nsmd
+
+3. To have correlation/association with available sensors in PLDM (in case of NVSwitches & NetworkAdapters) and NSM device EM json configuration is to be added for each sensor Id in PLDM providing the auxillary name and other EM config derived details.
+More details are added in nsmd repo (nsmd/tools/correlation/Readme.md): https://gitlab-master.nvidia.com/dgx/bmc/nsmd
 
 ### Steps to enable nsmd for a specific platform
 To enable nsmd for a Platform, please follow steps given below.
