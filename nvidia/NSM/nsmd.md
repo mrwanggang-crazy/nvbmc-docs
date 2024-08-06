@@ -19,7 +19,7 @@ Reviewers:
 The nsmd service can discover NSM endpoint, gather telemetry data from the endpoints, and can publish them to D-Bus or similar IPC services, for consumer services like bmcweb.
 
 ## Relevant Standard Specifications
-1. [NVIDIA System Management API Specification](https://nvidia.sharepoint.com/sites/MCTPSystemManagementAPI/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FMCTPSystemManagementAPI%2FShared%20Documents%2FSpecifications%20%28working%20copy%29&viewid=2378e471%2Dba70%2D4475%2Dabde%2Db3ac9365091f&noAuthRedirect=1)
+1. NVIDIA System Management API Specification
 2. [DMTF MCTP Base Specification](https://www.dmtf.org/dsp/DSP0236)
 
 ## Architecture
@@ -275,7 +275,6 @@ xyz.openbmc_project.FruDevice       interface -         -                       
 
 #### PCIE BRIDGE DEVICE EM config
 Here is the basic example for the device pcie bridge EM json. It also contains sensors to be assumed by pldm type 2.
-For HGXB - https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/develop/meta-nvidia/meta-hgxb/recipes-phosphor/configuration/entity-manager/files/hgxb_cx7_chassis.json
 
 ```
 {
@@ -422,7 +421,6 @@ This is the general pattern we follow for sensor creation. For nsmd we are assum
 
 #### GB100 DEVICE EM config
 
-For hgxb:  https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/develop/meta-nvidia/meta-hgxb/recipes-phosphor/configuration/entity-manager/files/hgxb_gpu_chassis.json
 
 ```
 {
@@ -520,8 +518,6 @@ xyz.openbmc_project.Configuration.NSM_Processor.MIGMode           interface -   
 - ECCMode, MIGMode which are created in sub blocks of EM json. here are created as kind of secondary PDI's, e.g. "xyz.openbmc_project.Configuration.NSM_Processor.ECCMode" etc.
 
 #### PCIeRetimer DEVICE EM config
-
-For hgxb: https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/develop/meta-nvidia/meta-hgxb/recipes-phosphor/configuration/entity-manager/files/hgxb_pcieretimer_chassis.json
 
 - This is a special scenario. Retimer is not a device which is directly supported by nsmd. We get all its info from FPGA.
 - So here we tightly couple retimer with fpga EM json.
@@ -816,6 +812,7 @@ TODO - All Configuration PDIs with their application and type and description of
 
 #### Nvlink Port Configuration in EM Json
 1. To create required number of links of type "Name", add below mentioned configuration in EM json.
+
 | Configuration Property 	| type   	| Description                                          	            |
 |------------------------	|--------	|-----------------------------------------------------------------	|
 | Type                   	| string 	| NSM_NVLink                                                        |
@@ -839,10 +836,10 @@ Example json snippet:
     }
 ```
 2. To add topology details on the created dbus port objects, there is a python script which generates the EM json from a mapping excel sheet.
-More details are added in nsmd repo (nsmd/tools/topology/Readme.md): https://gitlab-master.nvidia.com/dgx/bmc/nsmd
+More details are added in nsmd repo (nsmd/tools/topology/Readme.md).
 
 3. To have correlation/association with available sensors in PLDM (in case of NVSwitches & NetworkAdapters) and NSM device EM json configuration is to be added for each sensor Id in PLDM providing the auxillary name and other EM config derived details.
-More details are added in nsmd repo (nsmd/tools/correlation/Readme.md): https://gitlab-master.nvidia.com/dgx/bmc/nsmd
+More details are added in nsmd repo (nsmd/tools/correlation/Readme.md).
 
 ### Steps to enable nsmd for a specific platform
 To enable nsmd for a Platform, please follow steps given below.
@@ -850,8 +847,6 @@ To enable nsmd for a Platform, please follow steps given below.
 1. Include nsmd as distro dependency for the Platform.
 2. Create Entity Manager configuration file for the device that supports NSM, and configure Entity Manager to use this file for the Platform. Refer Entity Manager documentation for information on involved steps. An example file in given in earlier sections.
 3. Provide Platform specific settings like request timeouts, number of retries etc, by using Meson Options (nsmd uses Meson build system). Use EXTRA_OEMESON variable from meson bbclass to provide non-default values for these settings. Refer meson_options.txt file at nsmd repo for list of all available configuration options.
-
-Example Entity Manager Platform Configuration [file](https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/tree/develop/meta-nvidia/meta-umbriel/recipes-phosphor/configuration/entity-manager/files?ref_type=heads).
 
 ## Reference
 1. https://www.dmtf.org/sites/default/files/standards/documents/DSP0257_1.0.1_0.pdf
