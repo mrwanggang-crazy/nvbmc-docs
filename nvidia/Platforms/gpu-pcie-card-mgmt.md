@@ -32,7 +32,7 @@ various OOB features.
 Use upstream [OpenBMC entity-manager](https://github.com/openbmc/entity-manager)
 to read and recognize the GPU via I2C FRU EEPROM.
 
-#### Step1: Write bitbake recipe 
+#### Step1: Write bitbake recipe
 
 #### Step2: Write Configuration Files
 ```
@@ -46,7 +46,7 @@ Entity-manager PROBE statement:
 [NvBMC libmctp](https://github.com/NVIDIA/libmctp) can disover the GPU as an
 MCTP USB endpoint as well as to perform MCTP Tx/Rx.
 
-#### Step1: Write bitbake recipe 
+#### Step1: Write bitbake recipe
 
 #### Step2: Write Configuration Files
 - Enable `COFIG_TUN` and `CONFIG_MCTP` in the kernel KConfig.
@@ -87,17 +87,335 @@ to function correctly:
 |      |                         |               |
 |      |                         |               |
 
-#### Step1: Write bitbake recipe 
+#### Step1: Write bitbake recipe
+
+```
+SUMMARY = "Nvidia System Management Daemon"
+DESCRIPTION = "Nvidia System Management Daemon"
+
+PR = "r1"
+PV = "0.1+git${SRCPV}"
+
+LICENSE = "CLOSED"
+
+inherit meson pkgconfig obmc-phosphor-systemd
+
+DEPENDS += "function2"
+DEPENDS += "systemd"
+DEPENDS += "sdbusplus"
+DEPENDS += "sdeventplus"
+DEPENDS += "phosphor-dbus-interfaces"
+DEPENDS += "phosphor-logging"
+DEPENDS += "nlohmann-json"
+DEPENDS += "cli11"
+DEPENDS += "libmctp"
+DEPENDS += "nvidia-tal"
+
+#EXTRA_OEMESON = "-Dtests=disabled"
+
+SRC_URI = "git://git@gitlab-master.nvidia.com:12051/dgx/bmc/nsmd.git;protocol=ssh;branch=develop"
+SRCREV = "5bfa384101d9dc05867779a99b398c602067a9b2"
+S = "${WORKDIR}/git"
+
+SYSTEMD_SERVICE:${PN} = "nsmd.service"
+FILES:${PN}:append = " ${datadir}/libnsm/instance-db/default"
+```
+
+bitbake changes to include all configurations in entity manager
+
+```
+FILESEXTRAPATHS:append := "${THISDIR}/files:"
+
+DEPENDS += "python3-pandas-native"
+DEPENDS += "python3-openpyxl-native"
+DEPENDS += "python3-xlrd-native"
+
+SRC_URI = "git://git@gitlab-master.nvidia.com:12051/dgx/bmc/entity-manager.git;protocol=ssh;branch=develop file://blocklist.json"
+SRCREV = "1cfa102bdb0435ade263b3805a2cf3457a054f10"
+
+SRC_URI:append = " file://HMC.json \
+                   file://blacklist.json \
+                   file://hgxb_fpga_chassis.json \
+                   file://hgxb_gpu_chassis.json \
+                   file://hgxb_pcieretimer_chassis.json \
+                   file://hgxb_nvlink_chassis.json \
+                   file://hgxb_cx7_chassis.json \
+                   file://HGXB_NVLink_Mapping.xlsx \
+                   file://nvLink_topology_processor.py \
+                   file://hgxb_static_inventory.json \
+                   file://hgxb_instance_mapping.json \
+                   file://hgxb_gpu_configuration.json \
+                   file://hgxb_erot_configuration.json \
+                   file://hgxb_erot_bmc0_chassis.json \
+                   file://hgxb_erot_fpga0_chassis.json \
+                   file://hgxb_erot_cx7_chassis.json \
+                   file://hgxb_erot_qm3_chassis.json \
+                 "
+
+RDEPENDS:${PN} = " \
+        fru-device \
+        "
+
+do_configure:append() {
+    python3 ${WORKDIR}/nvLink_topology_processor.py ${WORKDIR}/HGXB_NVLink_Mapping.xlsx ${WORKDIR}/hgxb_link_topology.json
+}
+
+do_install:append() {
+     # Remove unnecessary config files. EntityManager spends significant time parsing these.
+     rm -f ${D}/usr/share/entity-manager/configurations/*.json
+
+     install -m 0444 ${WORKDIR}/HMC.json ${D}/usr/share/entity-manager/configurations
+     install -m 0444 ${WORKDIR}/blacklist.json ${D}/usr/share/entity-manager/
+     install -m 0444 ${WORKDIR}/hgxb_fpga_chassis.json ${D}/usr/share/entity-manager/configurations
+     install -m 0444 ${WORKDIR}/hgxb_gpu_chassis.json ${D}/usr/share/entity-manager/configurations
+     install -m 0444 ${WORKDIR}/hgxb_pcieretimer_chassis.json ${D}/usr/share/entity-manager/configurations
+     install -m 0444 ${WORKDIR}/hgxb_nvlink_chassis.json ${D}/usr/share/entity-manager/configurations
+     install -m 0444 ${WORKDIR}/hgxb_cx7_chassis.json ${D}/usr/share/entity-manager/configurations
+     install -m 0444 ${WORKDIR}/hgxb_link_topology.json ${D}/usr/share/entity-manager/configurations
+     install -m 0444 ${WORKDIR}/hgxb_static_inventory.json ${D}/usr/share/entity-manager/configurations
+     install -m 0444 ${WORKDIR}/hgxb_instance_mapping.json ${D}/usr/share/entity-manager/configurations
+     install -m 0444 ${WORKDIR}/hgxb_gpu_configuration.json ${D}/usr/share/entity-manager/configurations
+     install -m 0444 ${WORKDIR}/hgxb_erot_configuration.json ${D}/usr/share/entity-manager/configurations
+     install -m 0444 ${WORKDIR}/hgxb_erot_fpga0_chassis.json ${D}/usr/share/entity-manager/configurations
+     install -m 0444 ${WORKDIR}/hgxb_erot_bmc0_chassis.json ${D}/usr/share/entity-manager/configurations
+     install -m 0444 ${WORKDIR}/hgxb_erot_cx7_chassis.json ${D}/usr/share/entity-manager/configurations
+     install -m 0444 ${WORKDIR}/hgxb_erot_qm3_chassis.json ${D}/usr/share/entity-manager/configurations
+}
+
+```
 
 #### Step2: Write Configuration Files
 
+##### STATIC INVENTORY AND DYNAMIC INVENTORY
+NSM supports static inventory creation. Static inventory means that inventory objects will always be populated to D-Bus no matter if the communication of the NSM Device is ready or not.
+
+The properties of PDIs will be initialized to default value and they should  be updated to correct value once the communication of NSM Device is back(e.g. power on).
+
+What inventory object should be created by nsmd can be configurable by EM json file and whether inventory is static or dynamic is also configured through EM json file or by “probe” property of EM json with more specific.
+
+For static Inventory, the EM json probe rule should not be the condition depending on if EID enumerated or not. And the UUID property of every config PDIs should be in the format, “DEVICE_TYPE=X:INSTANCE_ID=Y” for nsmd to match the config PDI to correct nsmDevice when the device is enumerated.
+
+For dynamic inventory, the EM json probe rule should be "xyz.openbmc_project.FruDevice({'DEVICE_TYPE': X})" for the condition when nsmd created FruDevice PDI for the enumerated EID. And the UUID property of every config PDIs should be “$UUID”.
+
+Static inventory configuration : https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/develop/meta-nvidia/meta-hgxb/recipes-phosphor/configuration/entity-manager/files/hgxb_static_inventory.json
+
+e.g.
+
+```
+{
+    "Exposes": [],
+    "Name": "NSM_DEV_GPU_0",
+    "Probe": "TRUE",
+    "Type": "NSM_Configs",
+    "xyz.openbmc_project.NsmDevice": {
+        "DEVICE_TYPE": 0,
+        "INSTANCE_NUMBER": 0,
+        "CONNECTED_RETIMER_INSTANCE_NUM": 0,
+        "UUID": "STATIC:0:0"
+}
+
+```
+
+dynamic inventory : https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/develop/meta-nvidia/meta-hgxb/recipes-phosphor/configuration/entity-manager/files/hgxb_gpu_chassis.json
+
+```
+{
+    "Exposes": [
+      {
+        "Name": "HGX_GPU_SXM_$INSTANCE_NUMBER + 1",
+        "Type": "NSM_Chassis",
+        "UUID": "$UUID",
+        "DeviceType": "$DEVICE_TYPE",
+        "Chassis": {
+          "Type": "NSM_Chassis",
+          "DEVICE_UUID": "$DEVICE_UUID"
+        },
+        "Asset": {
+          "Type": "NSM_Asset",
+          "Manufacturer": "NVIDIA"
+        }
+      }
+    ],
+    "Probe": "xyz.openbmc_project.NsmDevice({'DEVICE_TYPE': 0})",
+    "Name": "HGX_GPU_SXM $INSTANCE_NUMBER + 1",
+    "Type": "chassis",
+    "Parent_Chassis": "/xyz/openbmc_project/inventory/system/chassis/HGX_Chassis_0",
+    "xyz.openbmc_project.Inventory.Decorator.Instance": {
+      "InstanceNumber": "$INSTANCE_NUMBER"
+    }
+  }
+
+```
+
+##### GPU INDEX MAPPING CONFIG FILE
+
+https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/develop/meta-nvidia/meta-hgxb/recipes-phosphor/configuration/entity-manager/files/hgxb_instance_mapping.json
+
+Adding support to have ability to update device instanceID via EM json configuration based on either of below mentioned fields.
+1. Instance ID [received from queryDeviceIdentification cmd]
+2. EID
+3. UUID
+
+NOTE: Priority is given in above order itself.
+
+In below examples:
+```
+Eid: 30 --> Mocks GPU with instanceId 1 [as per mapping instanceID 1 should have 5 as instanceID]
+Eid: 31 --> Mocks GPU with instanceId 4 [as per mapping instanceID 4 should have 0 as instanceID]
+Eid: 34 --> Mocks Switch with instanceId 6 [as per mapping eid 34 should have 0 as instanceID]
+Eid: 35 --> Mocks Switch with instanceId 8 [as per mapping eid 35 should have 1 as instanceID]
+Eid: 36 --> Mocks PCIeBridge with instanceId 6 [as per mapping uuid "24000000-0000-0000-0000-000000000000" should have 0 as instanceID]
+```
+
+```
+    Sample EM josn:
+[
+  {
+    "Exposes": [
+      {
+        "Name": "GPUMapping",
+        "Type": "NSM_GetInstanceIDByDeviceInstanceID",
+        "MappingArr": [
+          4,
+          5,
+          6,
+          7,
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "Name": "SwitchMapping",
+        "Type": "NSM_GetInstanceIDByDeviceEID",
+        "MappingArr": [
+          34,
+          35
+        ]
+      },
+      {
+        "Name": "PCIeBridgeMapping",
+        "Type": "NSM_GetInstanceIDByDeviceUUID",
+        "MappingArr": [
+          "24000000-0000-0000-0000-000000000000"
+        ]
+      }
+    ],
+    "Name": "Mapping",
+    "Probe": "TRUE",
+    "Type": "NSM_Configs"
+  }
+]
+
+```
+
+Expected result on dbus
+
+```
+root@hgxb:~# busctl tree xyz.openbmc_project.EntityManager
+`- /xyz
+  `- /xyz/openbmc_project
+    |- /xyz/openbmc_project/EntityManager
+    `- /xyz/openbmc_project/inventory
+      `- /xyz/openbmc_project/inventory/system
+        |- /xyz/openbmc_project/inventory/system/chassis
+        | |- /xyz/openbmc_project/inventory/system/chassis/HGX_FPGA_0
+........................................
+        `- /xyz/openbmc_project/inventory/system/nsm_configs
+          |- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping
+          | |- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/GPUMapping
+          | |- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/PCIeBridgeMapping
+          | `- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/SwitchMapping
+          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_CX_0
+          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_FPGA_0
+          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_0
+          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_1
+          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_2
+          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_3
+          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_4
+          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_5
+          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_6
+          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_7
+          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_QM_0
+          `- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_QM_1
+root@hgxb:~# busctl introspect xyz.openbmc_project.EntityManager /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/GPUMapping
+NAME                                                    TYPE      SIGNATURE RESULT/VALUE            FLAGS
+org.freedesktop.DBus.Introspectable                     interface -         -                       -
+.Introspect                                             method    -         s                       -
+org.freedesktop.DBus.Peer                               interface -         -                       -
+.GetMachineId                                           method    -         s                       -
+.Ping                                                   method    -         -                       -
+org.freedesktop.DBus.Properties                         interface -         -                       -
+.Get                                                    method    ss        v                       -
+.GetAll                                                 method    s         a{sv}                   -
+.Set                                                    method    ssv       -                       -
+.PropertiesChanged                                      signal    sa{sv}as  -                       -
+xyz.openbmc_project.Configuration.NSM_GetInstanceIDByD  interface -         -                       -
+.MappingArr                                             property  at        8 4 5 6 7 0 1 2 3       emits-change
+.Name                                                   property  s         "GPUMapping"            emits-change
+.Type                                                   property  s         "NSM_GetInstanceIDByDev emits-change
+
+root@hgxb:~# busctl introspect xyz.openbmc_project.EntityManager /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/PCIeBridgeMapping
+NAME                                              TYPE      SIGNATURE RESULT/VALUE                             FLAGS
+org.freedesktop.DBus.Introspectable               interface -         -                                        -
+.Introspect                                       method    -         s                                        -
+org.freedesktop.DBus.Peer                         interface -         -                                        -
+.GetMachineId                                     method    -         s                                        -
+.Ping                                             method    -         -                                        -
+org.freedesktop.DBus.Properties                   interface -         -                                        -
+.Get                                              method    ss        v                                        -
+.GetAll                                           method    s         a{sv}                                    -
+.Set                                              method    ssv       -                                        -
+.PropertiesChanged                                signal    sa{sv}as  -                                        -
+xyz.openbmc_project.Configuration.NSM_UUIDMapping interface -         -                                        -
+.MappingArr                                       property  as        1 "24000000-0000-0000-0000-000000000000" emits-change
+.Name                                             property  s         "PCIeBridgeMapping"                      emits-change
+.Type                                             property  s         "NSM_UUIDMapping"                        emits-change
+
+root@hgxb:~# busctl introspect xyz.openbmc_project.EntityManager /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/SwitchMapping
+NAME                                             TYPE      SIGNATURE RESULT/VALUE     FLAGS
+org.freedesktop.DBus.Introspectable              interface -         -                -
+.Introspect                                      method    -         s                -
+org.freedesktop.DBus.Peer                        interface -         -                -
+.GetMachineId                                    method    -         s                -
+.Ping                                            method    -         -                -
+org.freedesktop.DBus.Properties                  interface -         -                -
+.Get                                             method    ss        v                -
+.GetAll                                          method    s         a{sv}            -
+.Set                                             method    ssv       -                -
+.PropertiesChanged                               signal    sa{sv}as  -                -
+xyz.openbmc_project.Configuration.NSM_GetInstan  interface -         -                -
+.MappingArr                                      property  at        2 34 35          emits-change
+.Name                                            property  s         "SwitchMapping"  emits-change
+.Type                                            property  s         "NSM_GetInstance emits-change
+```
+
+
 #### Step3: Check expected D-Bus tree (with all config written)
+
+```
+root@hgxb:/usr/share/entity-manager/configurations# busctl tree xyz.openbmc_project.EntityManager
+`- /xyz
+  `- /xyz/openbmc_project
+    |- /xyz/openbmc_project/EntityManager
+    `- /xyz/openbmc_project/inventory
+      `- /xyz/openbmc_project/inventory/system
+        |- /xyz/openbmc_project/inventory/system/chassis
+        | `- /xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM_1
+        |   `- /xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM_1/HGX_GPU_SXM_1
+        `- /xyz/openbmc_project/inventory/system/nsm_configs
+          |- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping
+        | |- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/GPUMapping
+          | |- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/PCIeBridgeMapping
+          | `- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/SwitchMapping
+          `- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_0
+```
+
 
 ##### D-Bus interfaces implemented
 [xyz.openbmc_project.Association.Definitions]()
-
 [xyz.openbmc_project.Common.UUID]()
-
 [xyz.openbmc_project.Configuration.NsmDeviceAssociation]()
 [xyz.openbmc_project.Control.Mode]()
 [xyz.openbmc_project.Control.Power.Cap]()
