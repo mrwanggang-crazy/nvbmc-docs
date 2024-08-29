@@ -48,26 +48,83 @@ MCTP USB endpoint as well as to perform MCTP Tx/Rx.
 
 #### Step1: Write bitbake recipe
 
+A sample bitbake recipe append that enables NVBMC libmctp to generate a
+tunneling daemon and an MCTP control daemon with support for in-kernel MCTP
+sockets.
+
+``` bitbake
+FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+DEPENDS += " libusb1 "
+EXTRA_OEMESON += " -Denable-usb=enabled -Dmctp-in-kernel-enable=enabled -Denable-mctp-tun=enabled "
+```
+
 #### Step2: Write Configuration Files
 - Enable `COFIG_TUN` and `CONFIG_MCTP` in the kernel KConfig.
 - Enable the in-kernel MCTP userspace tools from this [distro feature](https://github.com/openbmc/openbmc/blob/master/meta-phosphor/conf/distro/include/mctp.inc).
 - Turn on `enable-mctp-tun` in libmctp to enable the tunneling daemon (mctp-tun).
-- mctp-tun can be run as follows `mctp-tun vendor_id=0x0955 product_id=0xFFFF class_id=0x0 -v`:
+- mctp-tun can be run as follows `mctp-tun vendor_id=0x0955 product_id=0xCF10 class_id=0x0 -v`:
     - `vendor_id` is the Vendor ID in the remote endpoint's USB device descriptor.
     - `product_id` is the Product ID in the remote endpoint's USB device descriptor.
     - `class_id` is currently unused.
     - `-v` is an optional argument that can be used to generate verbose Tx/Rx logs.
-- Set up the in-kernel MCTP stack to route packets to the tunneling daemon:
+- Set up the in-kernel MCTP stack to route packets to the tunneling daemon (this
+  could be done within a systemd service):
     ```
     #update local endpoint, ex EID 8
     mctp addr add 8 dev tun0
     #update remote endpoint id ex EID 12
     mctp route add 12 via tun0
+    #also route and downstream endpoints
+    mctp route add 13 via tun0
     #bring up the link for tun0
     mctp link set tun0 up
     ```
 
 #### Step3: Check expected D-Bus tree
+
+This assumes we have used the NVBMC MCTP control daemon. EID 12 is the EID for
+the MCU bridge and 13 is the EID assigned to the GPU.
+
+``` txt
+#  busctl tree xyz.openbmc_project.MCTP.Control.USB -l
+`- /xyz
+  `- /xyz/openbmc_project
+    `- /xyz/openbmc_project/mctp
+      |- /xyz/openbmc_project/mctp/0
+      | |- /xyz/openbmc_project/mctp/0/12
+      | |- /xyz/openbmc_project/mctp/0/13
+      `- /xyz/openbmc_project/mctp/USB
+```
+
+``` txt
+#  busctl introspect xyz.openbmc_project.MCTP.Control.USB /xyz/openbmc_project/mctp/0/13 -l
+NAME                                  TYPE      SIGNATURE RESULT/VALUE                                        FLAGS
+org.freedesktop.DBus.Introspectable   interface -         -                                                   -
+.Introspect                           method    -         s                                                   -
+org.freedesktop.DBus.Peer             interface -         -                                                   -
+.GetMachineId                         method    -         s                                                   -
+.Ping                                 method    -         -                                                   -
+org.freedesktop.DBus.Properties       interface -         -                                                   -
+.Get                                  method    ss        v                                                   -
+.GetAll                               method    s         a{sv}                                               -
+.Set                                  method    ssv       -                                                   -
+.PropertiesChanged                    signal    sa{sv}as  -                                                   -
+xyz.openbmc_project.Common.UUID       interface -         -                                                   -
+.UUID                                 property  s         "f72d6fb0-5675-11ed-9b6a-0242ac120002"              const
+xyz.openbmc_project.Common.UnixSocket interface -         -                                                   -
+.Address                              property  ay        13 0 109 99 116 112 45 117 115 98 45 109 117 120    const
+.Protocol                             property  u         0                                                   const
+.Type                                 property  u         5                                                   const
+xyz.openbmc_project.MCTP.Binding      interface -         -                                                   -
+.BindingType                          property  s         "xyz.openbmc_project.MCTP.Binding.BindingTypes.USB" const
+xyz.openbmc_project.MCTP.Endpoint     interface -         -                                                   -
+.EID                                  property  u         13                                                  const
+.MediumType                           property  s         "xyz.openbmc_project.MCTP.Endpoint.MediaTypes.I3C"  const
+.NetworkId                            property  u         0                                                   const
+.SupportedMessageTypes                property  ay        5 1 5 6 126 127                                     const
+xyz.openbmc_project.Object.Enable     interface -         -                                                   -
+.Enabled                              property  b         true                                                emits-change writable
+```
 
 ##### D-Bus interfaces implemented
 
