@@ -136,15 +136,13 @@ xyz.openbmc_project.Object.Enable     interface -         -                     
 [NvBMC nsmd](https://github.com/NVIDIA/nsmd) can discover NSM endpoints and
 fetch telemetry from them.
 
-NSM commands listed in the table below require an entity-manager configuration
-to function correctly:
-| Type | Command                 | Configuration |
-| ---- | ----------------------- | ------------- |
-| 3    | Get Temperature Reading | [Link]()      |
-|      |                         |               |
-|      |                         |               |
-
 #### Step1: Write bitbake recipe
+
+Below is the nsmd reciepe file.
+To enable and build the NSMD recipe in your Yocto project, follow these steps:
+- Add the Recipe to Your Layer: e.g. meta-nvidia/recipes-nvidia/nsmd/nsmd_git.bb
+- Include the Layer in Your Build: Make sure your Yocto project includes the layer containing the NSMD recipe. Edit your bblayers.conf file to include the path to the layer
+- Add the Recipe to Your Image: To include the NSMD package in your image, you need to add it to the image recipe. For e.g. use OBMC_IMAGE_EXTRA_INSTALL:append = nsmd in custom image reciepe eg. meta-nvidia/meta-hgxb/recipes-phosphor/images/obmc-phosphor-image.bbappend for platform umbriel.
 
 ```
 SUMMARY = "Nvidia System Management Daemon"
@@ -178,7 +176,33 @@ SYSTEMD_SERVICE:${PN} = "nsmd.service"
 FILES:${PN}:append = " ${datadir}/libnsm/instance-db/default"
 ```
 
-bitbake changes to include all configurations in entity manager
+All the above dependencies are mandatory except nvidia-tal.
+For nv-tal reference : https://gitlab-master.nvidia.com/dgx/bmc/nvidia-tal
+For nv-shmem reference : https://gitlab-master.nvidia.com/dgx/bmc/nv-shmem
+
+##### Meson Build Options in nsmd
+
+| **Option**                           | **Type**   | **Default Value** | **Description**                                                                                                                  |
+|--------------------------------------|------------|-------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| `tests`                              | `feature`  | `enabled`         | Controls whether the tests are built for the project.                                                                             |
+| `stanbyToDC`                         | `feature`  | `enabled`         | Enables features related to transitioning from standby to DC (Direct Current) mode.                                               |
+| `shmem`                              | `feature`  | `enabled`         | Enables support for NVIDIA's Shared-Memory Inter-Process Communication (IPC).                                                     |
+| `sensor-polling-time`                | `integer`  | `249`             | Specifies the interval time of sensor polling in milliseconds.                                                                    |
+| `gpio-name`                          | `string`   | `GPU_BASE_PWR_GD` | Specifies the GPIO name for NSM (Nvidia System Management) operations.                                                            |
+| `sensor-polling-time-long-running`   | `integer`  | `1499`            | Specifies the interval time of sensor polling for NSM long-running requests in milliseconds.                                      |
+| `mockup-responder`                   | `feature`  | `enabled`         | Enables a mockup responder for testing or simulation purposes.                                                                    |
+| `instance-id-expiration-interval`    | `integer`  | `5`               | Specifies how often NSM instance IDs expire in seconds.                                                                           |
+| `instance-id-expiration-interval-long-running` | `integer` | `10`        | Specifies how often NSM instance IDs expire for long-running requests in seconds.                                                 |
+| `number-of-request-retries`          | `integer`  | `2`               | Specifies the number of retries for NSM requests before failing.                                                                  |
+| `response-time-out`                  | `integer`  | `2000`            | Specifies the timeout interval for NSM responses in milliseconds.                                                                 |
+| `response-time-out-long-running`     | `integer`  | `3000`            | Specifies the timeout interval for NSM responses during long-running requests in milliseconds.                                    |
+| `local-eid`                          | `integer`  | `9`               | Specifies the default local EID (Endpoint Identifier) for local communication.                                                    |
+| `aer-error-status-priority`          | `boolean`  | `false`           | Specifies whether to prioritize Aer Error Status Sensors.                                                                         |
+| `per-lan-error-count-priority`       | `boolean`  | `false`           | Specifies whether to prioritize Per Lane Error Count Sensors.                                                                     |
+| `error-injection-priority`           | `boolean`  | `false`           | Specifies whether to prioritize Error Injection during error testing or handling.                                                 |
+
+
+Bitbake changes to include all configurations in entity manager
 
 ```
 FILESEXTRAPATHS:append := "${THISDIR}/files:"
@@ -190,53 +214,23 @@ DEPENDS += "python3-xlrd-native"
 SRC_URI = "git://git@gitlab-master.nvidia.com:12051/dgx/bmc/entity-manager.git;protocol=ssh;branch=develop file://blocklist.json"
 SRCREV = "1cfa102bdb0435ade263b3805a2cf3457a054f10"
 
-SRC_URI:append = " file://HMC.json \
-                   file://blacklist.json \
-                   file://hgxb_fpga_chassis.json \
+SRC_URI:append = "
                    file://hgxb_gpu_chassis.json \
-                   file://hgxb_pcieretimer_chassis.json \
-                   file://hgxb_nvlink_chassis.json \
-                   file://hgxb_cx7_chassis.json \
-                   file://HGXB_NVLink_Mapping.xlsx \
-                   file://nvLink_topology_processor.py \
                    file://hgxb_static_inventory.json \
                    file://hgxb_instance_mapping.json \
-                   file://hgxb_gpu_configuration.json \
-                   file://hgxb_erot_configuration.json \
-                   file://hgxb_erot_bmc0_chassis.json \
-                   file://hgxb_erot_fpga0_chassis.json \
-                   file://hgxb_erot_cx7_chassis.json \
-                   file://hgxb_erot_qm3_chassis.json \
                  "
 
 RDEPENDS:${PN} = " \
         fru-device \
         "
 
-do_configure:append() {
-    python3 ${WORKDIR}/nvLink_topology_processor.py ${WORKDIR}/HGXB_NVLink_Mapping.xlsx ${WORKDIR}/hgxb_link_topology.json
-}
-
 do_install:append() {
      # Remove unnecessary config files. EntityManager spends significant time parsing these.
      rm -f ${D}/usr/share/entity-manager/configurations/*.json
 
-     install -m 0444 ${WORKDIR}/HMC.json ${D}/usr/share/entity-manager/configurations
-     install -m 0444 ${WORKDIR}/blacklist.json ${D}/usr/share/entity-manager/
-     install -m 0444 ${WORKDIR}/hgxb_fpga_chassis.json ${D}/usr/share/entity-manager/configurations
      install -m 0444 ${WORKDIR}/hgxb_gpu_chassis.json ${D}/usr/share/entity-manager/configurations
-     install -m 0444 ${WORKDIR}/hgxb_pcieretimer_chassis.json ${D}/usr/share/entity-manager/configurations
-     install -m 0444 ${WORKDIR}/hgxb_nvlink_chassis.json ${D}/usr/share/entity-manager/configurations
-     install -m 0444 ${WORKDIR}/hgxb_cx7_chassis.json ${D}/usr/share/entity-manager/configurations
-     install -m 0444 ${WORKDIR}/hgxb_link_topology.json ${D}/usr/share/entity-manager/configurations
      install -m 0444 ${WORKDIR}/hgxb_static_inventory.json ${D}/usr/share/entity-manager/configurations
      install -m 0444 ${WORKDIR}/hgxb_instance_mapping.json ${D}/usr/share/entity-manager/configurations
-     install -m 0444 ${WORKDIR}/hgxb_gpu_configuration.json ${D}/usr/share/entity-manager/configurations
-     install -m 0444 ${WORKDIR}/hgxb_erot_configuration.json ${D}/usr/share/entity-manager/configurations
-     install -m 0444 ${WORKDIR}/hgxb_erot_fpga0_chassis.json ${D}/usr/share/entity-manager/configurations
-     install -m 0444 ${WORKDIR}/hgxb_erot_bmc0_chassis.json ${D}/usr/share/entity-manager/configurations
-     install -m 0444 ${WORKDIR}/hgxb_erot_cx7_chassis.json ${D}/usr/share/entity-manager/configurations
-     install -m 0444 ${WORKDIR}/hgxb_erot_qm3_chassis.json ${D}/usr/share/entity-manager/configurations
 }
 
 ```
@@ -246,7 +240,7 @@ do_install:append() {
 ##### STATIC INVENTORY AND DYNAMIC INVENTORY
 NSM supports static inventory creation. Static inventory means that inventory objects will always be populated to D-Bus no matter if the communication of the NSM Device is ready or not.
 
-The properties of PDIs will be initialized to default value and they should  be updated to correct value once the communication of NSM Device is back(e.g. power on).
+The properties of PDIs will be initialized to default value and they should  be updated to correct value once the device shows up on MCTP network(e.g. power on).
 
 What inventory object should be created by nsmd can be configurable by EM json file and whether inventory is static or dynamic is also configured through EM json file or by “probe” property of EM json with more specific.
 
@@ -262,16 +256,19 @@ e.g.
 {
     "Exposes": [],
     "Name": "NSM_DEV_GPU_0",
-    "Probe": "TRUE",
+    "Probe": <Match something from the B40 FRU EEPROM>,
     "Type": "NSM_Configs",
     "xyz.openbmc_project.NsmDevice": {
         "DEVICE_TYPE": 0,
         "INSTANCE_NUMBER": 0,
-        "CONNECTED_RETIMER_INSTANCE_NUM": 0,
         "UUID": "STATIC:0:0"
 }
 
 ```
+
+DEVICE_TYPE is unique value which identifies whether it is gpu, fpga, qm3 etc
+INSTANCE_NUMBER is unique number to identify different instances of same device type
+For Static inventory as discussed above UUID is is format DEVICE_TYPE=X:INSTANCE_ID=Y , so for device type 0 and instance 3 it will be "UUID": "STATIC:0:3"
 
 dynamic inventory : https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/develop/meta-nvidia/meta-hgxb/recipes-phosphor/configuration/entity-manager/files/hgxb_gpu_chassis.json
 
@@ -283,9 +280,12 @@ dynamic inventory : https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/deve
         "Type": "NSM_Chassis",
         "UUID": "$UUID",
         "DeviceType": "$DEVICE_TYPE",
-        "Chassis": {
-          "Type": "NSM_Chassis",
-          "DEVICE_UUID": "$DEVICE_UUID"
+        "Dimension": {
+          "Type": "NSM_Dimension"
+        },
+        "Location": {
+          "Type": "NSM_Location",
+          "LocationType": "xyz.openbmc_project.Inventory.Decorator.Location.LocationTypes.Embedded"
         },
         "Asset": {
           "Type": "NSM_Asset",
@@ -293,7 +293,7 @@ dynamic inventory : https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/deve
         }
       }
     ],
-    "Probe": "xyz.openbmc_project.NsmDevice({'DEVICE_TYPE': 0})",
+    "Probe": "map something to platform FRU EEPROM",
     "Name": "HGX_GPU_SXM $INSTANCE_NUMBER + 1",
     "Type": "chassis",
     "Parent_Chassis": "/xyz/openbmc_project/inventory/system/chassis/HGX_Chassis_0",
@@ -303,6 +303,8 @@ dynamic inventory : https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/deve
   }
 
 ```
+
+Here we are creating configuration pdi related to gpu chassis to be consumed by nsmd. we create sensor of type NSM_Dimension, NSM_Location, NSM_Asset etc here. we pass on property values like Manufacturer, LocationType with it.
 
 ##### GPU INDEX MAPPING CONFIG FILE
 
@@ -319,13 +321,10 @@ In below examples:
 ```
 Eid: 30 --> Mocks GPU with instanceId 1 [as per mapping instanceID 1 should have 5 as instanceID]
 Eid: 31 --> Mocks GPU with instanceId 4 [as per mapping instanceID 4 should have 0 as instanceID]
-Eid: 34 --> Mocks Switch with instanceId 6 [as per mapping eid 34 should have 0 as instanceID]
-Eid: 35 --> Mocks Switch with instanceId 8 [as per mapping eid 35 should have 1 as instanceID]
-Eid: 36 --> Mocks PCIeBridge with instanceId 6 [as per mapping uuid "24000000-0000-0000-0000-000000000000" should have 0 as instanceID]
 ```
 
 ```
-    Sample EM josn:
+    Sample EM json for 8 gpu:
 [
   {
     "Exposes": [
@@ -343,19 +342,43 @@ Eid: 36 --> Mocks PCIeBridge with instanceId 6 [as per mapping uuid "24000000-00
           3
         ]
       },
+
+
+      OR
+
+
       {
-        "Name": "SwitchMapping",
+        "Name": "GPUMapping",
         "Type": "NSM_GetInstanceIDByDeviceEID",
         "MappingArr": [
-          34,
-          35
+          30,
+          31,
+          28,
+          29,
+          32,
+          33,
+          35,
+          34
         ]
-      },
+      }
+
+
+
+      OR
+
+
       {
-        "Name": "PCIeBridgeMapping",
+        "Name": "GPUMapping",
         "Type": "NSM_GetInstanceIDByDeviceUUID",
         "MappingArr": [
-          "24000000-0000-0000-0000-000000000000"
+          "24000000-0000-0000-0000-000000000000",
+          ....,
+          ....,
+          .
+          .
+          .
+          .
+          "24000000-0000-0000-0000-0000000023423"
         ]
       }
     ],
@@ -377,25 +400,13 @@ root@hgxb:~# busctl tree xyz.openbmc_project.EntityManager
     `- /xyz/openbmc_project/inventory
       `- /xyz/openbmc_project/inventory/system
         |- /xyz/openbmc_project/inventory/system/chassis
-        | |- /xyz/openbmc_project/inventory/system/chassis/HGX_FPGA_0
 ........................................
         `- /xyz/openbmc_project/inventory/system/nsm_configs
           |- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping
           | |- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/GPUMapping
-          | |- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/PCIeBridgeMapping
-          | `- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/SwitchMapping
-          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_CX_0
-          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_FPGA_0
           |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_0
-          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_1
-          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_2
-          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_3
-          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_4
-          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_5
-          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_6
-          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_7
-          |- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_QM_0
-          `- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_QM_1
+
+**OPTION 1**
 root@hgxb:~# busctl introspect xyz.openbmc_project.EntityManager /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/GPUMapping
 NAME                                                    TYPE      SIGNATURE RESULT/VALUE            FLAGS
 org.freedesktop.DBus.Introspectable                     interface -         -                       -
@@ -413,7 +424,9 @@ xyz.openbmc_project.Configuration.NSM_GetInstanceIDByD  interface -         -   
 .Name                                                   property  s         "GPUMapping"            emits-change
 .Type                                                   property  s         "NSM_GetInstanceIDByDev emits-change
 
-root@hgxb:~# busctl introspect xyz.openbmc_project.EntityManager /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/PCIeBridgeMapping
+
+**OPTION 2**
+root@hgxb:~# busctl introspect xyz.openbmc_project.EntityManager /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/GPUMapping
 NAME                                              TYPE      SIGNATURE RESULT/VALUE                             FLAGS
 org.freedesktop.DBus.Introspectable               interface -         -                                        -
 .Introspect                                       method    -         s                                        -
@@ -427,25 +440,27 @@ org.freedesktop.DBus.Properties                   interface -         -         
 .PropertiesChanged                                signal    sa{sv}as  -                                        -
 xyz.openbmc_project.Configuration.NSM_UUIDMapping interface -         -                                        -
 .MappingArr                                       property  as        1 "24000000-0000-0000-0000-000000000000" emits-change
-.Name                                             property  s         "PCIeBridgeMapping"                      emits-change
+.Name                                             property  s         "GPUMapping"                             emits-change
 .Type                                             property  s         "NSM_UUIDMapping"                        emits-change
 
-root@hgxb:~# busctl introspect xyz.openbmc_project.EntityManager /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/SwitchMapping
-NAME                                             TYPE      SIGNATURE RESULT/VALUE     FLAGS
-org.freedesktop.DBus.Introspectable              interface -         -                -
-.Introspect                                      method    -         s                -
-org.freedesktop.DBus.Peer                        interface -         -                -
-.GetMachineId                                    method    -         s                -
-.Ping                                            method    -         -                -
-org.freedesktop.DBus.Properties                  interface -         -                -
-.Get                                             method    ss        v                -
-.GetAll                                          method    s         a{sv}            -
-.Set                                             method    ssv       -                -
-.PropertiesChanged                               signal    sa{sv}as  -                -
-xyz.openbmc_project.Configuration.NSM_GetInstan  interface -         -                -
-.MappingArr                                      property  at        2 34 35          emits-change
-.Name                                            property  s         "SwitchMapping"  emits-change
-.Type                                            property  s         "NSM_GetInstance emits-change
+
+**OPTION 3**
+root@hgxb:~# busctl introspect xyz.openbmc_project.EntityManager /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/GPUMapping
+NAME                                             TYPE      SIGNATURE         RESULT/VALUE                  FLAGS
+org.freedesktop.DBus.Introspectable              interface -                 -                               -
+.Introspect                                      method    -                 s                               -
+org.freedesktop.DBus.Peer                        interface -                 -                               -
+.GetMachineId                                    method    -                 s                               -
+.Ping                                            method    -                 -                               -
+org.freedesktop.DBus.Properties                  interface -                 -                               -
+.Get                                             method    ss                v                               -
+.GetAll                                          method    s                 a{sv}                           -
+.Set                                             method    ssv               -                               -
+.PropertiesChanged                               signal    sa{sv}as          -                               -
+xyz.openbmc_project.Configuration.NSM_GetInstan  interface -                 -                               -
+.MappingArr                                      property  at                2 30 31 28 29 32 35 34          emits-change
+.Name                                            property  s                 "GPUMapping"                    emits-change
+.Type                                            property  s                 "NSM_GetInstance                emits-change
 ```
 
 
@@ -464,9 +479,738 @@ root@hgxb:/usr/share/entity-manager/configurations# busctl tree xyz.openbmc_proj
         `- /xyz/openbmc_project/inventory/system/nsm_configs
           |- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping
         | |- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/GPUMapping
-          | |- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/PCIeBridgeMapping
-          | `- /xyz/openbmc_project/inventory/system/nsm_configs/Mapping/SwitchMapping
           `- /xyz/openbmc_project/inventory/system/nsm_configs/NSM_DEV_GPU_0
+```
+
+
+#### FULL BLACKWELL GPU CONFIG
+
+```
+[
+  {
+    "Exposes": [
+      {
+        "Name": "HGX_GPU_SXM_$INSTANCE_NUMBER + 1",
+        "Type": "NSM_Chassis",
+        "UUID": "$UUID",
+        "DeviceType": "$DEVICE_TYPE",
+        "Chassis": {
+          "Type": "NSM_Chassis",
+          "DEVICE_UUID": "$DEVICE_UUID"
+        },
+        "Asset": {
+          "Type": "NSM_Asset",
+          "Manufacturer": "NVIDIA"
+        },
+        "Dimension": {
+          "Type": "NSM_Dimension"
+        },
+        "Location": {
+          "Type": "NSM_Location",
+          "LocationType": "xyz.openbmc_project.Inventory.Decorator.Location.LocationTypes.Embedded"
+        },
+        "LocationCode": {
+          "Type": "NSM_LocationCode",
+          "LocationCode": "SXM$INSTANCE_NUMBER + 1"
+        },
+        "ChassisType": {
+          "Type": "NSM_ChassisType",
+          "ChassisType": "xyz.openbmc_project.Inventory.Item.Chassis.ChassisType.Module"
+        },
+        "Health": {
+          "Type": "NSM_Health",
+          "Health": "xyz.openbmc_project.State.Decorator.Health.HealthType.OK"
+        },
+        "PowerLimit": {
+          "Type": "NSM_PowerLimit",
+          "Priority": false
+        },
+        "PrettyName": {
+          "Type": "NSM_PrettyName",
+          "Name": "GPU_SXM_$INSTANCE_NUMBER + 1"
+        }
+      },
+      {
+        "ChassisName": "HGX_GPU_SXM_$INSTANCE_NUMBER + 1",
+        "Name": "Assembly0",
+        "Type": "NSM_ChassisAssembly",
+        "UUID": "$UUID",
+        "Area": {
+          "Type": "NSM_Area",
+          "PhysicalContext": "xyz.openbmc_project.Inventory.Decorator.Area.PhysicalContextType.GPU"
+        },
+        "Asset": {
+          "Type": "NSM_Asset",
+          "Name": "GPU Board Assembly",
+          "Vendor": "NVIDIA"
+        },
+        "Health": {
+          "Type": "NSM_Health",
+          "Health": "xyz.openbmc_project.State.Decorator.Health.HealthType.OK"
+        },
+        "Location": {
+          "Type": "NSM_Location",
+          "LocationType": "xyz.openbmc_project.Inventory.Decorator.Location.LocationTypes.Embedded"
+        }
+      },
+      {
+        "ChassisName": "HGX_GPU_SXM_$INSTANCE_NUMBER + 1",
+        "Name": "Assembly1",
+        "Type": "NSM_ChassisAssembly",
+        "UUID": "$UUID",
+	"DeviceAssembly": true,
+        "Area": {
+          "Type": "NSM_Area",
+          "PhysicalContext": "xyz.openbmc_project.Inventory.Decorator.Area.PhysicalContextType.GPU"
+        },
+        "Asset": {
+          "Type": "NSM_Asset",
+          "Name": "GPU Device Assembly",
+          "Vendor": "NVIDIA"
+        },
+        "Health": {
+          "Type": "NSM_Health",
+          "Health": "xyz.openbmc_project.State.Decorator.Health.HealthType.OK"
+        },
+        "Location": {
+          "Type": "NSM_Location",
+          "LocationType": "xyz.openbmc_project.Inventory.Decorator.Location.LocationTypes.Embedded"
+        }
+      },
+      {
+        "ChassisName": "HGX_GPU_SXM_$INSTANCE_NUMBER + 1",
+        "Name": "GPU_SXM_$INSTANCE_NUMBER + 1",
+        "Type": "NSM_ChassisPCIeDevice",
+        "UUID": "$UUID",
+        "DEVICE_UUID": "$DEVICE_UUID",
+        "Asset": {
+          "Type": "NSM_Asset",
+          "Name": "HGX_GPU_SXM_$INSTANCE_NUMBER + 1",
+          "Manufacturer": "NVIDIA"
+        },
+        "Associations": [
+          {
+            "Forward": "chassis",
+            "Backward": "pciedevice",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM_$INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "connected_port",
+            "Backward": "connected_pciedevice",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/fabrics/HGX_PCIeRetimerTopology_$CONNECTED_RETIMER_INSTANCE_NUM/Switches/PCIeRetimer_$CONNECTED_RETIMER_INSTANCE_NUM/Ports/Down_0"
+          }
+        ],
+        "Health": {
+          "Type": "NSM_Health",
+          "Health": "xyz.openbmc_project.State.Decorator.Health.HealthType.OK"
+        },
+        "PCIeDevice": {
+          "Type": "NSM_PCIeDevice",
+          "DeviceType": "SingleFunction",
+          "DeviceIndex": 0,
+          "Priority": false,
+          "Functions": [
+            0
+          ]
+        },
+        "LTSSMState": {
+          "Type": "NSM_LTSSMState",
+          "DeviceIndex": 0,
+          "Priority": false,
+          "InventoryObjPath": "/xyz/openbmc_project/inventory/system/fabrics/HGX_PCIeRetimerTopology_$CONNECTED_RETIMER_INSTANCE_NUM/Switches/PCIeRetimer_$CONNECTED_RETIMER_INSTANCE_NUM/Ports/Down_0"
+        },
+        "ClockOutputEnableState": {
+          "Type": "NSM_ClockOutputEnableState",
+          "InstanceNumber": "$INSTANCE_NUMBER",
+          "DeviceType": "$DEVICE_TYPE",
+          "Priority": false
+        }
+      },
+      {
+        "Name": "HGX_GPU_SXM $INSTANCE_NUMBER + 1 TEMP_0",
+        "Type": "NSM_Temp",
+        "Associations": [
+          {
+            "Forward": "chassis",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM $INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "processor",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM $INSTANCE_NUMBER + 1"
+          }
+        ],
+        "UUID": "$UUID",
+        "PhysicalContext": "GPU",
+        "Aggregated": true,
+        "SensorId": 0,
+        "Priority": true
+      },
+      {
+        "Name": "HGX_GPU_SXM $INSTANCE_NUMBER + 1 TEMP_1",
+        "Type": "NSM_Temp",
+        "Associations": [
+          {
+            "Forward": "chassis",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM $INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "processor",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM $INSTANCE_NUMBER + 1"
+          }
+        ],
+        "ThermalParameters": [
+          {
+            "Name": "LowerCaution",
+            "Dynamic": true,
+            "Type": "NSM_ThermalParameter",
+            "ParameterId": 4,
+            "PeriodicUpdate": false
+          },
+          {
+            "Name": "LowerCritical",
+            "Dynamic": true,
+            "Type": "NSM_ThermalParameter",
+            "ParameterId": 1,
+            "PeriodicUpdate": false
+          },
+          {
+            "Name": "LowerFatal",
+            "Dynamic": true,
+            "Type": "NSM_ThermalParameter",
+            "ParameterId": 2,
+            "PeriodicUpdate": false
+          }
+        ],
+        "UUID": "$UUID",
+        "PhysicalContext": "GPU",
+        "Implementation": "Synthesized",
+        "ReadingBasis": "Headroom",
+        "Description": "Thermal Limit(TLIMIT) Temperature is the distance in deg C from the GPU temperature to the first throttle limit.",
+        "Aggregated": true,
+        "SensorId": 2,
+        "Priority": true
+      },
+      {
+        "Name": "HGX_GPU_SXM $INSTANCE_NUMBER + 1 DRAM_0_Temp_0",
+        "Type": "NSM_Temp",
+        "Associations": [
+          {
+            "Forward": "chassis",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM $INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "processor",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM $INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "memory",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/memory/GPU_SXM $INSTANCE_NUMBER + 1 DRAM_0"
+          }
+        ],
+        "ThermalParameters": [
+          {
+            "Name": "UpperCritical",
+            "Dynamic": false,
+            "Value": 95.0
+          }
+        ],
+        "UUID": "$UUID",
+        "PhysicalContext": "GPU",
+        "Aggregated": true,
+        "SensorId": 1,
+        "Priority": true
+      },
+      {
+        "Name": "HGX_GPU_SXM $INSTANCE_NUMBER + 1 Power_0",
+        "Type": "NSM_Power",
+        "CompositeNumericSensors": [
+          "/xyz/openbmc_project/sensors/power/HGX_Chassis_0_TotalGPU_Power_0"
+        ],
+        "Associations": [
+          {
+            "Forward": "chassis",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM $INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "processor",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM $INSTANCE_NUMBER + 1"
+          }
+        ],
+        "PeakValue": {
+            "SensorId": 0,
+            "AveragingInterval": 0,
+            "Aggregated": true,
+            "Priority": true
+        },
+        "UUID": "$UUID",
+        "PhysicalContext": "GPU",
+        "MaxAllowableOperatingValue": 1020.0,
+        "Aggregated": true,
+        "SensorId": 0,
+        "AveragingInterval": 0,
+        "Priority": true
+      },
+      {
+        "Name": "HGX_GPU_SXM $INSTANCE_NUMBER + 1 DRAM_0_Power_0",
+        "Type": "NSM_Power",
+        "Associations": [
+          {
+            "Forward": "chassis",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM $INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "processor",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM $INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "memory",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/memory/GPU_SXM $INSTANCE_NUMBER + 1 DRAM_0"
+          }
+        ],
+        "UUID": "$UUID",
+        "PhysicalContext": "GPU",
+        "Aggregated": true,
+        "SensorId": 1,
+        "AveragingInterval": 0,
+        "Priority": true
+      },
+      {
+        "Name": "HGX_GPU_SXM $INSTANCE_NUMBER + 1 Energy_0",
+        "Type": "NSM_Energy",
+        "Associations": [
+          {
+            "Forward": "chassis",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM $INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "processor",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM $INSTANCE_NUMBER + 1"
+          }
+        ],
+        "UUID": "$UUID",
+        "PhysicalContext": "GPU",
+        "Aggregated": true,
+        "SensorId": 0,
+        "Priority": true
+      },
+      {
+        "Name": "HGX_GPU_SXM $INSTANCE_NUMBER + 1 Voltage_0",
+        "Type": "NSM_Voltage",
+        "Associations": [
+          {
+            "Forward": "chassis",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM $INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "processor",
+            "Backward": "all_sensors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM $INSTANCE_NUMBER + 1"
+          }
+        ],
+        "UUID": "$UUID",
+        "PhysicalContext": "GPU",
+        "Aggregated": true,
+        "SensorId": 0,
+        "Priority": false
+      },
+      {
+        "Name": "HGX_Driver_GPU_SXM_$INSTANCE_NUMBER + 1",
+        "Type": "NSM_GPU_SWInventory",
+        "Associations": [
+          {
+            "Forward": "inventory",
+            "Backward": "software",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM_$INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "software_version",
+            "Backward": "updateable",
+            "AbsolutePath": "/xyz/openbmc_project/software"
+          }
+        ],
+        "UUID": "$UUID",
+        "Manufacturer": "Nvidia"
+      },
+      {
+        "Name": "GlobalEventSetting",
+        "Type": "NSM_EventSetting",
+        "UUID": "$UUID",
+        "EventGenerationSetting": 2
+      },
+      {
+        "Name": "deviceCapabilityDiscoveryEventSetting",
+        "Type": "NSM_EventConfig",
+        "MessageType": 0,
+        "UUID": "$UUID",
+        "SubscribedEventIDs": [
+          1
+        ],
+        "AcknowledgementEventIds": []
+      },
+      {
+        "Name": "PlatformEnvironmentEventSetting",
+        "Type": "NSM_EventConfig",
+        "MessageType": 3,
+        "UUID": "$UUID",
+        "SubscribedEventIDs": [
+          0,
+          1
+        ]
+      },
+      {
+        "Name": "XIDEventSetting",
+        "Type": "NSM_Event_XID",
+        "UUID": "$UUID",
+        "OriginOfCondition": "/redfish/v1/Chassis/HGX_GPU_SXM_$INSTANCE_NUMBER + 1",
+        "MessageId": "ResourceEvent.1.0.ResourceErrorsDetected",
+        "Severity": "Critical",
+        "LoggingNamespace": "GPU_SXM $INSTANCE_NUMBER + 1 XID",
+        "Resolution": "Regarding XID documentation and further actions please refer to XID and sXID Catalog for NVIDIA Data Center Products (NVOnline: 1115699)",
+        "MessageArgs": [
+          "GPU_SXM_$INSTANCE_NUMBER + 1 Driver Event Message",
+          "[{Timestamp}][{SequenceNumber}][{Flags:x}] XID {EventMessageReason} {MessageTextString}"
+        ]
+      },
+      {
+        "Name": "ResetRequiredEventSetting",
+        "Type": "NSM_Event_Reset_Required",
+        "UUID": "$UUID",
+        "OriginOfCondition": "/redfish/v1/Chassis/HGX_GPU_SXM_$INSTANCE_NUMBER + 1",
+        "MessageId": "Base.1.13.ResetRequired",
+        "Severity": "Critical",
+        "LoggingNamespace": "GPU_SXM_$INSTANCE_NUMBER + 1",
+        "Resolution": "Reset the GPU or power cycle the Baseboard.",
+        "MessageArgs": [
+          "GPU_SXM_$INSTANCE_NUMBER + 1",
+          "ForceRestart"
+        ]
+      },
+      {
+        "Name": "NVLink",
+        "Type": "NSM_NVLink",
+        "ParentObjPath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM_$INSTANCE_NUMBER + 1",
+        "DeviceType": "$DEVICE_TYPE",
+        "UUID": "$UUID",
+        "Priority": false,
+        "Count": 18
+      },
+      {
+        "Name": "HGX_GPU_SXM $INSTANCE_NUMBER + 1 ClockLimit_0",
+        "Type": "NSM_ControlClockLimit_0",
+        "PhysicalContext": "xyz.openbmc_project.Inventory.Decorator.Area.PhysicalContextType.GPU",
+        "InventoryObjPath": "/xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM_$INSTANCE_NUMBER + 1",
+        "Associations": [
+          {
+            "Forward": "parent_chassis",
+            "Backward": "clock_controls",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM $INSTANCE_NUMBER + 1"
+          }
+        ],
+        "UUID": "$UUID",
+        "ClockMode": "com.nvidia.ClockMode.Mode.MaximumPerformance",
+        "Priority": false
+      },
+      {
+        "Name": "GPU_$INSTANCE_NUMBER + 1 Processor",
+        "Type": "NSM_Processor",
+        "Associations": [
+          {
+            "Forward": "parent_chassis",
+            "Backward": "all_processors",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM $INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "system_interface",
+            "Backward": "",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM $INSTANCE_NUMBER + 1 /PCIeDevices/GPU_SXM $INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "all_memory",
+            "Backward": "parent_processor",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/memory/HGX_GPU_SXM $INSTANCE_NUMBER + 1 DRAM_0"
+          },
+          {
+            "Forward": "all_switches",
+            "Backward": "processor",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/fabrics/HGX_NVLinkFabric_0/Switches/NVSwitch_0"
+          },
+          {
+            "Forward": "all_switches",
+            "Backward": "processor",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/fabrics/HGX_NVLinkFabric_0/Switches/NVSwitch_1"
+          }
+        ],
+        "UUID": "$UUID",
+        "DEVICE_UUID": "$DEVICE_UUID",
+        "InventoryObjPath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM_$INSTANCE_NUMBER + 1",
+        "Asset": {
+          "Type": "NSM_Asset",
+          "Manufacturer": "NVIDIA"
+        },
+        "Location": {
+          "Type": "NSM_Location",
+          "LocationType": "xyz.openbmc_project.Inventory.Decorator.Location.LocationTypes.Embedded"
+        },
+        "LocationCode": {
+          "Type": "NSM_LocationCode",
+          "LocationCode": "SXM$INSTANCE_NUMBER + 1"
+        },
+        "MIGMode": {
+          "Type": "NSM_MIG",
+          "Priority": false
+        },
+        "PortDisableFuture": {
+          "Type": "NSM_PortDisableFuture",
+          "Priority": false
+        },
+        "ECCMode": {
+          "Type": "NSM_ECC",
+          "Priority": false
+        },
+        "PowerCap": {
+          "Type": "NSM_PowerCap",
+          "Priority": false,
+          "CompositeNumericSensors": [
+            "/xyz/openbmc_project/inventory/system/chassis/power/control/TotalGPU_Power_0"
+          ]
+        },
+	"PowerSmoothing": {
+          "Type": "NSM_PowerSmoothing",
+          "Priority": false
+        },
+        "PCIe": {
+          "Type": "NSM_PCIe",
+          "Priority": false,
+          "DeviceId": 0,
+          "Count": 1
+        },
+        "CpuOperatingConfig": {
+          "Type": "NSM_CpuOperatingConfig",
+          "Priority": false
+        },
+        "ProcessorPerformance": {
+          "Type": "NSM_ProcessorPerformance",
+          "Priority": false,
+          "DeviceId": 0
+        },
+        "MemCapacityUtil": {
+          "Type": "NSM_MemCapacityUtil",
+          "Priority": false
+        },
+        "InbandReconfigPermissions": {
+          "Type": "NSM_InbandReconfigPermissions",
+          "Priority": false,
+          "Features": [
+            "InSystemTest",
+            "FusingMode",
+            "CCMode",
+            "BAR0Firewall",
+            "CCDevMode",
+            "TGPCurrentLimit",
+            "TGPRatedLimit",
+            "TGPMaxLimit",
+            "TGPMinLimit",
+            "ClockLimit",
+            "NVLinkDisable",
+            "ECCEnable",
+            "PCIeVFConfiguration",
+            "RowRemappingAllowed",
+            "RowRemappingFeature",
+            "HBMFrequencyChange",
+            "HULKLicenseUpdate",
+            "ForceTestCoupling",
+            "BAR0TypeConfig",
+            "EDPpScalingFactor",
+            "PowerSmoothingPrivilegeLevel1",
+            "PowerSmoothingPrivilegeLevel2"
+           ]
+        },
+        "TotalNvLinksCount": {
+          "Type": "NSM_TotalNvLinksCount",
+          "Priority": false
+        }
+      },
+      {
+        "Name": "GPU_$INSTANCE_NUMBER + 1 Memory",
+        "Type": "NSM_Memory",
+        "Associations": [
+          {
+            "Forward": "parent_processor",
+            "Backward": "all_memory",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM $INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "parent_chassis",
+            "Backward": "all_memory",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM_$INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "all_sensors",
+            "Backward": "memory",
+            "AbsolutePath": "/xyz/openbmc_project/sensors/temperature/HGX_GPU_SXM_$INSTANCE_NUMBER + 1_DRAM_0_Temp_0"
+          },
+          {
+            "Forward": "all_sensors",
+            "Backward": "memory",
+            "AbsolutePath": "/xyz/openbmc_project/sensors/power/HGX_GPU_SXM_$INSTANCE_NUMBER + 1_DRAM_0_Power_0"
+          }
+        ],
+        "ErrorCorrection": "xyz.openbmc_project.Inventory.Item.Dimm.Ecc.SingleBitECC",
+        "DeviceType": "xyz.openbmc_project.Inventory.Item.Dimm.DeviceType.HBM",
+        "UUID": "$UUID",
+        "Priority": false,
+        "InventoryObjPath": "/xyz/openbmc_project/inventory/system/memory/GPU_SXM_$INSTANCE_NUMBER + 1",
+        "RowRemapping": {
+          "Type": "NSM_RowRemapping",
+          "Priority": false
+        },
+        "ECCMode": {
+          "Type": "NSM_ECC",
+          "Priority": false
+        },
+        "MemCapacityUtil": {
+          "Type": "NSM_MemCapacityUtil",
+          "Priority": false
+        }
+      },
+      {
+        "Name": "GPU_$INSTANCE_NUMBER + 1 PCIe_0",
+        "Type": "NSM_GPU_PCIe_0",
+        "UUID": "$UUID",
+        "InventoryObjPath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM_$INSTANCE_NUMBER + 1",
+        "Health": "xyz.openbmc_project.State.Decorator.Health.HealthType.OK",
+        "ChasisPowerState": "xyz.openbmc_project.State.Chassis.PowerState.On",
+        "DeviceIndex": 0,
+        "ClearableScalarGroup": [
+          2,
+          3,
+          4
+        ],
+        "Associations": [
+          {
+            "Forward": "parent_device",
+            "Backward": "all_states",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM_$INSTANCE_NUMBER + 1"
+          },
+          {
+            "Forward": "associated_switch",
+            "Backward": "connected_port",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/fabrics/HGX_PCIeRetimerTopology_$CONNECTED_RETIMER_INSTANCE_NUM/Switches/PCIeRetimer_$CONNECTED_RETIMER_INSTANCE_NUM"
+          },
+          {
+            "Forward": "switch_port",
+            "Backward": "processor_port",
+            "AbsolutePath": "/xyz/openbmc_project/inventory/system/fabrics/HGX_PCIeRetimerTopology_$CONNECTED_RETIMER_INSTANCE_NUM/Switches/PCIeRetimer_$CONNECTED_RETIMER_INSTANCE_NUM/Ports/Down_0"
+          }
+        ],
+        "PortInfo": {
+          "Type": "NSM_PortInfo",
+          "PortType": "xyz.openbmc_project.Inventory.Decorator.PortInfo.PortType.UpstreamPort",
+          "PortProtocol": "xyz.openbmc_project.Inventory.Decorator.PortInfo.PortProtocol.PCIe",
+          "Priority": false
+        }
+      },
+      {
+        "Name": "GPU_$INSTANCE_NUMBER + 1 GPM_Aggregated_Metrics",
+        "Type": "NSM_GPMMetrics",
+        "UUID": "$UUID",
+        "Priority": false,
+        "InventoryObjPath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM_$INSTANCE_NUMBER + 1",
+        "RetrievalSource": 1,
+        "GpuInstance": 255,
+        "ComputeInstance": 255,
+        "MetricsBitfield": [255, 255, 31],
+        "MemoryBandwidth": true,
+        "MemoryInventoryObjPath": "/xyz/openbmc_project/inventory/system/memory/GPU_SXM $INSTANCE_NUMBER + 1 DRAM_0",
+        "PerInstanceMetrics": [
+          {
+            "Name": "GPU_$INSTANCE_NUMBER + 1 GPM_NVDEC_PerInstance_Metrics",
+            "Type": "NSM_GPMPerInstanceMetrics",
+            "Priority": false,
+            "InventoryObjPath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM_$INSTANCE_NUMBER + 1",
+            "RetrievalSource": 2,
+            "GpuInstance": 255,
+            "ComputeInstance": 255,
+            "Metric": "NVDEC",
+            "MetricId": 14,
+            "InstanceBitfield": 255
+          },
+          {
+            "Name": "GPU_$INSTANCE_NUMBER + 1 GPM_NVJPG_PerInstance_Metrics",
+            "Type": "NSM_GPMPerInstanceMetrics",
+            "Priority": false,
+            "InventoryObjPath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM_$INSTANCE_NUMBER + 1",
+            "RetrievalSource": 2,
+            "GpuInstance": 255,
+            "ComputeInstance": 255,
+            "Metric": "NVJPG",
+            "MetricId": 15,
+            "InstanceBitfield": 255
+          }
+        ]
+      },
+      {
+        "Name": "GPU_$INSTANCE_NUMBER + 1 GPM_Port_Metrics",
+        "Type": "NSM_GPMPortMetrics",
+        "UUID": "$UUID",
+        "Priority": false,
+        "InventoryObjPath": "/xyz/openbmc_project/inventory/system/processors/GPU_SXM_$INSTANCE_NUMBER + 1",
+        "RetrievalSource": 0,
+        "GpuInstance": 255,
+        "ComputeInstance": 255,
+        "Metrics": [
+          "NVLinkRawTxBandwidthGbps",
+          "NVLinkDataTxBandwidthGbps",
+          "NVLinkRawRxBandwidthGbps",
+          "NVLinkDataRxBandwidthGbps"
+        ],
+        "Ports": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17
+        ],
+        "InstanceBitfield": 262143
+      }
+    ],
+    "Probe": "xyz.openbmc_project.NsmDevice({'DEVICE_TYPE': 0})",
+    "Name": "HGX_GPU_SXM $INSTANCE_NUMBER + 1",
+    "Type": "chassis",
+    "Parent_Chassis": "/xyz/openbmc_project/inventory/system/chassis/HGX_Chassis_0",
+    "xyz.openbmc_project.Inventory.Decorator.Instance": {
+      "InstanceNumber": "$INSTANCE_NUMBER"
+    }
+  }
+]
 ```
 
 
