@@ -53,23 +53,70 @@ tunneling daemon and an MCTP control daemon with support for in-kernel MCTP
 sockets.
 
 ``` bitbake
+FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
-DEPENDS += " libusb1 "
+
+SRC_URI = "git://git@gitlab-master.nvidia.com:12051/dgx/bmc/libmctp.git;protocol=ssh;branch=develop \
+           file://default"
+SRCREV = "0f62812a5cdd2facbea804539cc568d48b426266"
+
+inherit obmc-phosphor-dbus-service obmc-phosphor-systemd
+
+DEPENDS += "json-c \
+            i2c-tools \
+            libusb1 \
+           "
+
+SYSTEMD_SERVICE:${PN}:remove = " mctp-spi-ctrl.service \
+                                 mctp-spi-demux.service \
+                                 mctp-spi-demux.socket \
+                                 mctp-pcie-ctrl.service  \
+                                 mctp-pcie-demux.service \
+                                 mctp-pcie-demux.socket  \
+                               "
+
+SYSTEMD_SERVICE:${PN} = "mctp-usb-tun.service \
+                         mctp-usb-ctrl.service \
+                        "
+
+CONFFILES:${PN} = "${datadir}/mctp/mctp"
+
+FILES:${PN}:append = "${datadir} ${datadir}/mctp"
+
+do_install:append() {
+    install -d ${D}${datadir}/mctp
+    install -m 0644 ${WORKDIR}/mctp ${D}${datadir}/mctp/mctp
+    rm -f ${D}${nonarch_base_libdir}/systemd/system/mctp-pcie-ctrl.service
+    rm -f ${D}${nonarch_base_libdir}/systemd/system/mctp-pcie-demux.service
+    rm -f ${D}${nonarch_base_libdir}/systemd/system/mctp-pcie-demux.socket
+    rm -f ${D}${nonarch_base_libdir}/systemd/system/mctp-spi-ctrl.service
+    rm -f ${D}${nonarch_base_libdir}/systemd/system/mctp-spi-demux.service
+    rm -f ${D}${nonarch_base_libdir}/systemd/system/mctp-spi-demux.socket
+}
+
 EXTRA_OEMESON += " -Denable-usb=enabled -Dmctp-in-kernel-enable=enabled -Denable-mctp-tun=enabled "
 ```
 
 #### Step2: Write Configuration Files
+
+The tunneling daemon only supports one MCU endpoint as of this writing. It will
+later be enhanced so that multiple instances of a tunneling daemon can cater to
+different MCUs.
+
 - Enable `COFIG_TUN` and `CONFIG_MCTP` in the kernel KConfig.
 - Enable the in-kernel MCTP userspace tools from this [distro feature](https://github.com/openbmc/openbmc/blob/master/meta-phosphor/conf/distro/include/mctp.inc).
-- Turn on `enable-mctp-tun` in libmctp to enable the tunneling daemon (mctp-tun).
-- mctp-tun can be run as follows `mctp-tun vendor_id=0x0955 product_id=0xCF10 class_id=0x0 -v`:
-    - `vendor_id` is the Vendor ID in the remote endpoint's USB device descriptor.
-    - `product_id` is the Product ID in the remote endpoint's USB device descriptor.
-    - `class_id` is currently unused.
-    - `-v` is an optional argument that can be used to generate verbose Tx/Rx logs.
+- Turn on `enable-mctp-tun` in libmctp to enable the tunneling daemon (mctp-tun)
+- mctp-tun can be run as follows
+  `mctp-tun vendor_id=0x0955 product_id=0xCF10 class_id=0x0 -v`:
+  - `vendor_id` is the Vendor ID in the remote endpoint's USB device descriptor
+  - `product_id` is the Product ID in the remote endpoint's USB device descriptor
+  - `class_id` is currently unused
+  - `-v` is an optional argument that can be used to generate verbose Tx/Rx logs
 - Set up the in-kernel MCTP stack to route packets to the tunneling daemon (this
-  could be done within a systemd service):
-    ```
+  could be done within a systemd service that launches the control daemon with
+  an ExecStartPre, for example):
+
+    ``` txt
     #update local endpoint, ex EID 8
     mctp addr add 8 dev tun0
     #update remote endpoint id ex EID 12
@@ -79,6 +126,58 @@ EXTRA_OEMESON += " -Denable-usb=enabled -Dmctp-in-kernel-enable=enabled -Denable
     #bring up the link for tun0
     mctp link set tun0 up
     ```
+
+- Launch the MCTP control service to perform MCTP discovery
+  `/usr/bin/mctp-ctrl -m 1 -t 3 -i 8 -p 12 -x 13 -d 1 -v 1`
+- Note that the laucnhing of these services can be done via installing systemd
+  service files that launch the MCTP tunneling daemon and the MCTP control
+  daemon. Here is an example of both systemd service files.
+
+  MCTP tunnel service (mctp-usb-tun.service):
+
+  ``` ini
+  [Unit]
+
+  Description=MCTP USB tunneling daemon
+
+  [Service]
+  Restart=always
+  Environment=TUN_USB_BINDING_OPTS=null
+  EnvironmentFile=-/usr/share/mctp/mctp
+  ExecStart=/usr/bin/mctp-tun $TUN_USB_BINDING_OPTS
+  SyslogIdentifier=mctp-usb-tun
+
+  [Unit]
+  WantedBy=multi-user.target
+  ```
+
+  MCTP control service (mctp-usb-ctrl.service):
+
+  ``` ini
+  [Unit]
+  Description=MCTP USB control daemon
+
+  [Service]
+  Restart=always
+  Environment=MCTP_USB_CTRL_OPTS=null
+  EnvironmentFile=-/usr/share/mctp/mctp
+  ExecStart=/usr/bin/mctp-usb-ctrl $MCTP_USB_CTRL_OPTS
+  SyslogIdentifier=mctp-usb-ctrl
+
+  [Install]
+  WantedBy=multi-user.target
+
+  [Unit]
+  Requires=mctp-usb-tun.service
+  ```
+
+  Sample environment file (/usr/share/mctp/mctp):
+
+  ``` ini
+  # cat /usr/share/mctp/mctp
+  TUN_USB_BINDING_OPTS= vendor_id=0x0955 product_id=0xCF10 class_id=0x0
+  MCTP_USB_CTRL_OPTS= -m 1 -t 3 -i 8 -p 12 -x 13 -d 1 -v 1
+  ```
 
 #### Step3: Check expected D-Bus tree
 
@@ -127,6 +226,33 @@ xyz.openbmc_project.Object.Enable     interface -         -                     
 ```
 
 ##### D-Bus interfaces implemented
+
+Each MCTP endpoint D-Bus object implements the following D-Bus interfaces. All
+of the interfaces and the respective properties are required by MCTP control
+daemon's clients in order to discover and utilize the MCTP endpoint.
+
+- `xyz.openbmc_project.Common.UUID`
+  - Property `UUID`, which is the MCTP UUID for the corresponding MCTP endpoint.
+- `xyz.openbmc_project.MCTP.Binding`
+  - Property `BindingType`, which denotes the binding used by the BMC. For
+    example, when the MCTP control daemon is running for the USB binding, this
+    shall be `xyz.openbmc_project.MCTP.Binding.BindingTypes.USB`.
+- `xyz.openbmc_project.MCTP.Endpoint`. Properties on this interface are as
+  reported by the MCU bridge in its routing table.
+  - Property `EID` - the MCTP EID for the endpoint.
+  - Property `MediumType` - The physical medium type between the MCU and the
+    endpoint.
+  - Property `NetworkId` - The MCTP network ID, this is always 0 when using the
+    NVIDIA supplied MCTP control daemon.
+  - Property `SupportedMessageTypes` - An array of supported MCTP message types.
+- `xyz.openbmc_project.Object.Enable`
+  - Property `Enabled` - To indicate whether the endpoint is in an enabled
+    state. If a control daemon implementation does not support dynamically
+    disabling endpoints (for ex, via an MCTP discovery notify message), then
+    this should always be set to `true`.
+- `xyz.openbmc_project.Common.UnixSocket`. This interface is only used when
+  using the userspace libmctp demux daemon. This is not needed if using the
+  in-kernel MCTP with a tunneling daemon.
 
 #### References
 - [Bitbake Recipe]()
