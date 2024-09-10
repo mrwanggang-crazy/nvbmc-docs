@@ -109,7 +109,8 @@ different MCUs.
 - mctp-tun can be run as follows
   `mctp-tun vendor_id=0x0955 product_id=0xCF10 class_id=0x0 -v`:
   - `vendor_id` is the Vendor ID in the remote endpoint's USB device descriptor
-  - `product_id` is the Product ID in the remote endpoint's USB device descriptor
+  - `product_id` is the Product ID in the remote endpoint's USB device
+     descriptor
   - `class_id` is currently unused
   - `-v` is an optional argument that can be used to generate verbose Tx/Rx logs
 - Set up the in-kernel MCTP stack to route packets to the tunneling daemon (this
@@ -254,8 +255,43 @@ daemon's clients in order to discover and utilize the MCTP endpoint.
   using the userspace libmctp demux daemon. This is not needed if using the
   in-kernel MCTP with a tunneling daemon.
 
+In addition to the endpoint D-Bus objects, the control daemon also hosts the
+object `/xyz/openbmc_project/mctp/USB` which is as below:
+
+``` txt
+# busctl introspect xyz.openbmc_project.MCTP.Control.USB /xyz/openbmc_project/mctp/USB -l
+NAME                                   TYPE      SIGNATURE  RESULT/VALUE                                               FLAGS
+org.freedesktop.DBus.Introspectable    interface -          -                                                          -
+.Introspect                            method    -          s                                                          -
+org.freedesktop.DBus.ObjectManager     interface -          -                                                          -
+.GetManagedObjects                     method    -          a{oa{sa{sv}}}                                              -
+.InterfacesAdded                       signal    oa{sa{sv}} -                                                          -
+.InterfacesRemoved                     signal    oas        -                                                          -
+org.freedesktop.DBus.Peer              interface -          -                                                          -
+.GetMachineId                          method    -          s                                                          -
+.Ping                                  method    -          -                                                          -
+org.freedesktop.DBus.Properties        interface -          -                                                          -
+.Get                                   method    ss         v                                                          -
+.GetAll                                method    s          a{sv}                                                      -
+.Set                                   method    ssv        -                                                          -
+.PropertiesChanged                     signal    sa{sv}as   -                                                          -
+xyz.openbmc_project.State.ServiceReady interface -          -                                                          -
+.ServiceType                           property  s          "xyz.openbmc_project.State.ServiceReady.ServiceTypes.MCTP" const
+.State                                 property  s          "xyz.openbmc_project.State.ServiceReady.States.Enabled"    emits-change writable
+```
+
+The interface to note here is `xyz.openbmc_project.State.ServiceReady` which
+needs the below properties:
+
+- `ServiceType` is always
+  `xyz.openbmc_project.State.ServiceReady.ServiceTypes.MCTP`
+- `State` starts with
+  `xyz.openbmc_project.State.ServiceReady.States.Starting` and changes to
+  `xyz.openbmc_project.State.ServiceReady.States.Enabled` once the control
+  daemon has finished discovery.
+
 #### References
-- [Bitbake Recipe]()
+
 - [MCTP design docs](https://github.com/NVIDIA/nvbmc-docs/tree/develop/nvidia/MCTP)
 
 ### Telemetry
