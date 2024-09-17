@@ -1068,6 +1068,10 @@ UNIX socket   │      │
 
 ![NSM mockup responder sequence diagram](nsm_mockup_device_sequence_diagram.png)
 
+#### How to run mockup responder
+
+![NSM mockup responder running sequence diagram](nsm_mock_responder_running_sequence_dia.png)
+
 #### mockup EID json file
 
 ```
