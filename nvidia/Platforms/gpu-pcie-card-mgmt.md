@@ -300,11 +300,11 @@ fetch telemetry from them.
 
 #### Step1: Write bitbake recipe
 
-Below is the nsmd reciepe file.
+Below is the nsmd recipe file.
 To enable and build the NSMD recipe in your Yocto project, follow these steps:
 - Add the Recipe to Your Layer: e.g. meta-nvidia/recipes-nvidia/nsmd/nsmd_git.bb
 - Include the Layer in Your Build: Make sure your Yocto project includes the layer containing the NSMD recipe. Edit your bblayers.conf file to include the path to the layer
-- Add the Recipe to Your Image: To include the NSMD package in your image, you need to add it to the image recipe. For e.g. use OBMC_IMAGE_EXTRA_INSTALL:append = nsmd in custom image reciepe eg. meta-nvidia/meta-hgxb/recipes-phosphor/images/obmc-phosphor-image.bbappend for platform umbriel.
+- Add the Recipe to Your Image: To include the NSMD package in your image, you need to add it to the image recipe. For e.g. use OBMC_IMAGE_EXTRA_INSTALL:append = nsmd in custom image recipe eg. meta-nvidia/meta-hgxb/recipes-phosphor/images/obmc-phosphor-image.bbappend for platform umbriel.
 
 ```
 SUMMARY = "Nvidia System Management Daemon"
@@ -339,8 +339,8 @@ FILES:${PN}:append = " ${datadir}/libnsm/instance-db/default"
 ```
 
 All the above dependencies are mandatory except nvidia-tal.
-For nv-tal reference : https://gitlab-master.nvidia.com/dgx/bmc/nvidia-tal
-For nv-shmem reference : https://gitlab-master.nvidia.com/dgx/bmc/nv-shmem
+For nv-tal reference : https://github.com/NVIDIA/nvidia-tal
+For nv-shmem reference : https://github.com/NVIDIA/nv-shmem
 
 ##### Meson Build Options in nsmd
 
@@ -373,7 +373,7 @@ DEPENDS += "python3-pandas-native"
 DEPENDS += "python3-openpyxl-native"
 DEPENDS += "python3-xlrd-native"
 
-SRC_URI = "git://git@gitlab-master.nvidia.com:12051/dgx/bmc/entity-manager.git;protocol=ssh;branch=develop file://blocklist.json"
+SRC_URI = "git://git@gitlab-master.nvidia.com:12051/dgx/bmc/entity-manager.git;protocol=ssh;branch=develop"
 SRCREV = "1cfa102bdb0435ade263b3805a2cf3457a054f10"
 
 SRC_URI:append = "
@@ -410,7 +410,7 @@ For static Inventory, the EM json probe rule should not be the condition dependi
 
 For dynamic inventory, the EM json probe rule should be "xyz.openbmc_project.FruDevice({'DEVICE_TYPE': X})" for the condition when nsmd created FruDevice PDI for the enumerated EID. And the UUID property of every config PDIs should be “$UUID”.
 
-Static inventory configuration : https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/develop/meta-nvidia/meta-hgxb/recipes-phosphor/configuration/entity-manager/files/hgxb_static_inventory.json
+Static inventory configuration : https://github.com/NVIDIA/openbmc/blob/develop/meta-nvidia/meta-prime/meta-graceblackwell/meta-gb200nvl/meta-hmc/recipes-phosphor/configuration/entity-manager/files/gb200nvl_static_inventory.json
 
 e.g.
 
@@ -428,11 +428,12 @@ e.g.
 
 ```
 
-DEVICE_TYPE is unique value which identifies whether it is gpu, fpga, qm3 etc
-INSTANCE_NUMBER is unique number to identify different instances of same device type
-For Static inventory as discussed above UUID is is format DEVICE_TYPE=X:INSTANCE_ID=Y , so for device type 0 and instance 3 it will be "UUID": "STATIC:0:3"
+- "DEVICE_TYPE" : is unique value which identifies whether it is gpu, fpga, qm3 etc
+- "INSTANCE_NUMBER" : is unique number to identify different instances of same device type
+- For Static inventory as discussed above UUID is is format DEVICE_TYPE=X:INSTANCE_ID=Y , so for device type 0 and instance 3 it will be "UUID": "STATIC:0:3"
+- "Parent_Chassis" : Parent_Chassis configuration from the json file will cause entity-manager to create parent_chassis association for the current configuration file being processed.
 
-dynamic inventory : https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/develop/meta-nvidia/meta-hgxb/recipes-phosphor/configuration/entity-manager/files/hgxb_gpu_chassis.json
+dynamic inventory : https://github.com/NVIDIA/openbmc/blob/develop/meta-nvidia/meta-prime/meta-graceblackwell/meta-gb200nvl/meta-hmc/recipes-phosphor/configuration/entity-manager/files/gb200nvl_gpu_chassis.json
 
 ```
 {
@@ -455,7 +456,7 @@ dynamic inventory : https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/deve
         }
       }
     ],
-    "Probe": "map something to platform FRU EEPROM",
+    "Probe": "xyz.openbmc_project.NsmDevice({'DEVICE_TYPE': 0})",
     "Name": "HGX_GPU_SXM $INSTANCE_NUMBER + 1",
     "Type": "chassis",
     "Parent_Chassis": "/xyz/openbmc_project/inventory/system/chassis/HGX_Chassis_0",
@@ -463,6 +464,7 @@ dynamic inventory : https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/deve
       "InstanceNumber": "$INSTANCE_NUMBER"
     }
   }
+}
 
 ```
 
@@ -470,7 +472,7 @@ Here we are creating configuration pdi related to gpu chassis to be consumed by 
 
 ##### GPU INDEX MAPPING CONFIG FILE
 
-https://gitlab-master.nvidia.com/dgx/bmc/openbmc/-/blob/develop/meta-nvidia/meta-hgxb/recipes-phosphor/configuration/entity-manager/files/hgxb_instance_mapping.json
+https://github.com/NVIDIA/openbmc/blob/develop/meta-nvidia/meta-prime/meta-graceblackwell/meta-gb200nvl/meta-hmc/recipes-phosphor/configuration/entity-manager/files/gb200nvl_instance_mapping.json
 
 Adding support to have ability to update device instanceID via EM json configuration based on either of below mentioned fields.
 1. Instance ID [received from queryDeviceIdentification cmd]
@@ -646,6 +648,99 @@ root@hgxb:/usr/share/entity-manager/configurations# busctl tree xyz.openbmc_proj
 
 
 #### FULL BLACKWELL GPU CONFIG
+
+- SINGLE GPU
+
+```
+[
+  {
+    "Exposes": [
+      {
+        "Name": "HGX_GPU_SXM_1",
+        "Type": "NSM_Chassis",
+        "UUID": "$UUID",
+        "DeviceType": "$DEVICE_TYPE",
+        "Chassis": {
+          "Type": "NSM_Chassis",
+          "DEVICE_UUID": "$DEVICE_UUID"
+        },
+        "Asset": {
+          "Type": "NSM_Asset",
+          "Manufacturer": "NVIDIA"
+        },
+        "Dimension": {
+          "Type": "NSM_Dimension"
+        },
+        "Location": {
+          "Type": "NSM_Location",
+          "LocationType": "xyz.openbmc_project.Inventory.Decorator.Location.LocationTypes.Embedded"
+        },
+        "LocationCode": {
+          "Type": "NSM_LocationCode",
+          "LocationCode": "SXM_1"
+        },
+        "ChassisType": {
+          "Type": "NSM_ChassisType",
+          "ChassisType": "xyz.openbmc_project.Inventory.Item.Chassis.ChassisType.Module"
+        },
+        "Health": {
+          "Type": "NSM_Health",
+          "Health": "xyz.openbmc_project.State.Decorator.Health.HealthType.OK"
+        },
+        "PowerLimit": {
+          "Type": "NSM_PowerLimit",
+          "Priority": false
+        },
+        "PrettyName": {
+          "Type": "NSM_PrettyName",
+          "Name": "GPU_SXM_1"
+        }
+      },
+      {
+        "ChassisName": "HGX_GPU_SXM_1",
+        "Name": "Assembly0",
+        "Type": "NSM_ChassisAssembly",
+        "UUID": "$UUID",
+        "Area": {
+          "Type": "NSM_Area",
+          "PhysicalContext": "xyz.openbmc_project.Inventory.Decorator.Area.PhysicalContextType.GPU"
+        },
+        "Asset": {
+          "Type": "NSM_Asset",
+          "Name": "GPU Board Assembly",
+          "Vendor": "NVIDIA"
+        },
+        "Health": {
+          "Type": "NSM_Health",
+          "Health": "xyz.openbmc_project.State.Decorator.Health.HealthType.OK"
+        },
+        "Location": {
+          "Type": "NSM_Location",
+          "LocationType": "xyz.openbmc_project.Inventory.Decorator.Location.LocationTypes.Embedded"
+        }
+      }
+      ....
+      ...
+      ....
+      ....
+    ],
+    "Probe": "xyz.openbmc_project.NsmDevice({'DEVICE_TYPE': 0})",
+    "Name": "HGX_GPU_SXM_1",
+    "Type": "chassis",
+    "Parent_Chassis": "/xyz/openbmc_project/inventory/system/chassis/HGX_Chassis_0",
+    "xyz.openbmc_project.Inventory.Decorator.Instance": {
+      "InstanceNumber": "$INSTANCE_NUMBER"
+    }
+  }
+]
+
+
+```
+
+- N GPU
+
+For N GPU config we will be dependent on instance number. Its already defined in GPU INDEX MAPPING CONFIG FILE section above.
+Here is the example below for full config for N gpu.
 
 ```
 [
@@ -1377,6 +1472,189 @@ root@hgxb:/usr/share/entity-manager/configurations# busctl tree xyz.openbmc_proj
 
 
 ##### D-Bus interfaces implemented
+
+Here is the dbus tree for 8 gpu config.
+
+```
+root@hgxb:~# busctl tree xyz.openbmc_project.NSM
+`- /xyz
+  `- /xyz/openbmc_project
+    |- /xyz/openbmc_project/FruDevice
+    | |- /xyz/openbmc_project/FruDevice/28
+    | |- /xyz/openbmc_project/FruDevice/29
+    | |- /xyz/openbmc_project/FruDevice/30
+    | |- /xyz/openbmc_project/FruDevice/31
+    | |- /xyz/openbmc_project/FruDevice/32
+    | |- /xyz/openbmc_project/FruDevice/33
+    | |- /xyz/openbmc_project/FruDevice/34
+    | `- /xyz/openbmc_project/FruDevice/35
+    |- /xyz/openbmc_project/NSM
+```
+
+```
+root@hgxb:~# busctl introspect xyz.openbmc_project.NSM  /xyz/openbmc_project/FruDevice/29 --full
+NAME                                        TYPE      SIGNATURE RESULT/VALUE                                                                         FLAGS
+org.freedesktop.DBus.Introspectable         interface -         -                                                                                    -
+.Introspect                                 method    -         s                                                                                    -
+org.freedesktop.DBus.Peer                   interface -         -                                                                                    -
+.GetMachineId                               method    -         s                                                                                    -
+.Ping                                       method    -         -                                                                                    -
+org.freedesktop.DBus.Properties             interface -         -                                                                                    -
+.Get                                        method    ss        v                                                                                    -
+.GetAll                                     method    s         a{sv}                                                                                -
+.Set                                        method    ssv       -                                                                                    -
+.PropertiesChanged                          signal    sa{sv}as  -                                                                                    -
+xyz.openbmc_project.FruDevice               interface -         -                                                                                    -
+.BUILD_DATE                                 property  s         "0000-00-00T00:00:00Z"                                                               emits-change
+.DEVICE_TYPE                                property  y         0                                                                                    emits-change
+.DEVICE_UUID                                property  s         "020c09c6-2662-f523-c474-fa5d63905f42"                                               emits-change
+.INSTANCE_NUMBER                            property  y         1                                                                                    emits-change
+.MARKETING_NAME                             property  s         "Bringup"                                                                            emits-change
+.SERIAL_NUMBER                              property  s         "0"                                                                                  emits-change
+.UUID                                       property  s         "5f7f6a71-3f28-4cc0-be5d-4985d4c52a0c"                                               emits-change
+```
+
+#### FRU Device PDI Properties
+List of Properties of FRU Device PDI created by nsmd. The list is not exhaustive.
+
+| Property               	| Type   	| Mandatory/Optional | NSM Command used to get Value            | Use                         |
+|--------------------------	|----------	|------------------- |----------------------------------------- | --------------------------- |
+| BOARD_PART_NUMBER       	| string 	| Mandatory          | Type 3 Get Inventory Information (0x11)  | For debugability.           |
+| DEVICE_TYPE            	| byte  	| Mandatory          | Type 0 Query Device Identification (0x09)| To determine list of inventories to be published. |
+| INSTANCE_NUMBER          	| byte   	| Mandatory          | Type 0 Query Device Identification (0x09)| To determine list of inventories to be published. |
+| SERIAL_NUMBER            	| string   	| Mandatory          | Type 3 Get Inventory Information (0x11)  | For debugability.           |
+| UUID                  	| string   	| Mandatory          | NA (Populated by MCTP Control Daemon)    | To uniquely identify a device and EID lookup.     |
+
+
+
+Also nsmd host object path /xyz/openbmc_project/NSM which implements interface xyz.openbmc_project.State.ServiceReady.
+The interface to note here is `xyz.openbmc_project.State.ServiceReady` which needs the below properties:
+
+- `ServiceType` is always `xyz.openbmc_project.State.ServiceReady.ServiceTypes.NSM`
+- `State` starts with
+  `xyz.openbmc_project.State.ServiceReady.States.Starting` and changes to
+  `xyz.openbmc_project.State.ServiceReady.States.Enabled` once all the sensors for all the devices are tried once.
+
+```
+root@hgxb:~# busctl introspect xyz.openbmc_project.NSM  /xyz/openbmc_project/NSM --full
+NAME                                   TYPE      SIGNATURE RESULT/VALUE                                              FLAGS
+com.nvidia.Common.LogDump              interface -         -                                                         -
+.LogDump                               method    -         -                                                         -
+org.freedesktop.DBus.Introspectable    interface -         -                                                         -
+.Introspect                            method    -         s                                                         -
+org.freedesktop.DBus.Peer              interface -         -                                                         -
+.GetMachineId                          method    -         s                                                         -
+.Ping                                  method    -         -                                                         -
+org.freedesktop.DBus.Properties        interface -         -                                                         -
+.Get                                   method    ss        v                                                         -
+.GetAll                                method    s         a{sv}                                                     -
+.Set                                   method    ssv       -                                                         -
+.PropertiesChanged                     signal    sa{sv}as  -                                                         -
+xyz.openbmc_project.State.ServiceReady interface -         -                                                         -
+.ServiceType                           property  s         "xyz.openbmc_project.State.ServiceReady.ServiceTypes.NSM" emits-change writable
+.State                                 property  s         "xyz.openbmc_project.State.ServiceReady.States.Enabled"   emits-change writable
+```
+
+Full Dbus Tree for 1 gpu
+
+```
+root@hgxb:~# busctl tree xyz.openbmc_project.NSM
+`- /xyz
+  `- /xyz/openbmc_project
+    |- /xyz/openbmc_project/FruDevice
+    | |- /xyz/openbmc_project/FruDevice/28
+    |- /xyz/openbmc_project/NSM
+    |- /xyz/openbmc_project/inventory
+    | `- /xyz/openbmc_project/inventory/system
+    |   |- /xyz/openbmc_project/inventory/system/chassis
+    |   | |- /xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM_1
+    |   | | |- /xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM_1/Assembly0
+    |   | | |- /xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM_1/Assembly1
+    |   | | |- /xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM_1/Controls
+    |   | | | `- /xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM_1/Controls/ClockLimit_0
+    |   | | |- /xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM_1/PCIeDevices
+    |   | | | `- /xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM_1/PCIeDevices/GPU_SXM_1
+    |   | | `- /xyz/openbmc_project/inventory/system/chassis/HGX_GPU_SXM_1/Settings
+    |   | `- /xyz/openbmc_project/inventory/system/chassis/HGX_IRoT_GPU_SXM_1
+    |   |   `- /xyz/openbmc_project/inventory/system/chassis/HGX_IRoT_GPU_SXM_1/Slots
+    |   |     |- /xyz/openbmc_project/inventory/system/chassis/HGX_IRoT_GPU_SXM_1/Slots/1
+    |   |     `- /xyz/openbmc_project/inventory/system/chassis/HGX_IRoT_GPU_SXM_1/Slots/2
+    |   |- /xyz/openbmc_project/inventory/system/fabrics
+    |   | `- /xyz/openbmc_project/inventory/system/fabrics/HGX_PCIeRetimerTopology_0
+    |   |   `- /xyz/openbmc_project/inventory/system/fabrics/HGX_PCIeRetimerTopology_0/Switches
+    |   |     `- /xyz/openbmc_project/inventory/system/fabrics/HGX_PCIeRetimerTopology_0/Switches/PCIeRetimer_0
+    |   |       `- /xyz/openbmc_project/inventory/system/fabrics/HGX_PCIeRetimerTopology_0/Switches/PCIeRetimer_0/Ports
+    |   |         `- /xyz/openbmc_project/inventory/system/fabrics/HGX_PCIeRetimerTopology_0/Switches/PCIeRetimer_0/Ports/Down_0
+    |   |- /xyz/openbmc_project/inventory/system/memory
+    |   | `- /xyz/openbmc_project/inventory/system/memory/GPU_SXM_1_DRAM_0
+    |   `- /xyz/openbmc_project/inventory/system/processors
+    |     `- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1
+    |       |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/ErrorInjection
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/ErrorInjection/MemoryErrors
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/ErrorInjection/NVLinkErrors
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/ErrorInjection/PCIeErrors
+    |       | `- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/ErrorInjection/ThermalErrors
+    |       |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/BAR0Firewall
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/BAR0TypeConfig
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/CCDevMode
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/CCMode
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/ClockLimit
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/ECCEnable
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/EDPpScalingFactor
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/ForceTestCoupling
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/FusingMode
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/HBMFrequencyChange
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/HULKLicenseUpdate
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/InSystemTest
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/NVLinkDisable
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/PCIeVFConfiguration
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/PowerSmoothingPrivilegeLevel1
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/PowerSmoothingPrivilegeLevel2
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/RowRemappingAllowed
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/RowRemappingFeature
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/TGPCurrentLimit
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/TGPMaxLimit
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/TGPMinLimit
+    |       | `- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/InbandReconfigPermissions/TGPRatedLimit
+    |       |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_0
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_1
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_10
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_11
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_12
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_13
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_14
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_15
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_16
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_17
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_2
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_3
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_4
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_5
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_6
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_7
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_8
+    |       | |- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/NVLink_9
+    |       | `- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/Ports/PCIe_0
+    |       `- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/profile
+    |         `- /xyz/openbmc_project/inventory/system/processors/GPU_SXM_1/profile/admin_profile
+    |- /xyz/openbmc_project/inventory_software
+    | `- /xyz/openbmc_project/inventory_software/HGX_Driver_GPU_SXM_1
+    `- /xyz/openbmc_project/sensors
+      |- /xyz/openbmc_project/sensors/energy
+      | `- /xyz/openbmc_project/sensors/energy/HGX_GPU_SXM_1_Energy_0
+      |- /xyz/openbmc_project/sensors/power
+      | |- /xyz/openbmc_project/sensors/power/HGX_GPU_SXM_1_DRAM_0_Power_0
+      | `- /xyz/openbmc_project/sensors/power/HGX_GPU_SXM_1_Power_0
+      |- /xyz/openbmc_project/sensors/temperature
+      | |- /xyz/openbmc_project/sensors/temperature/HGX_GPU_SXM_1_DRAM_0_Temp_0
+      | |- /xyz/openbmc_project/sensors/temperature/HGX_GPU_SXM_1_TEMP_0
+      | `- /xyz/openbmc_project/sensors/temperature/HGX_GPU_SXM_1_TEMP_1
+      `- /xyz/openbmc_project/sensors/voltage
+        `- /xyz/openbmc_project/sensors/voltage/HGX_GPU_SXM_1_Voltage_0
+```
+
 [xyz.openbmc_project.Association.Definitions]()
 [xyz.openbmc_project.Common.UUID]()
 [xyz.openbmc_project.Configuration.NsmDeviceAssociation]()
