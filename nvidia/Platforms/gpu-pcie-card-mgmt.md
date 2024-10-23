@@ -317,6 +317,7 @@ LICENSE = "CLOSED"
 
 inherit meson pkgconfig obmc-phosphor-systemd
 
+# Mandatory
 DEPENDS += "function2"
 DEPENDS += "systemd"
 DEPENDS += "sdbusplus"
@@ -326,9 +327,11 @@ DEPENDS += "phosphor-logging"
 DEPENDS += "nlohmann-json"
 DEPENDS += "cli11"
 DEPENDS += "libmctp"
-DEPENDS += "nvidia-tal"
 
-#EXTRA_OEMESON = "-Dtests=disabled"
+# Optionals
+# If the shmem option is enabled, it tries to locate nvidia-tal library as a build dependency,
+# default is on
+DEPENDS += "nvidia-tal"
 
 SRC_URI = "git://git@gitlab-master.nvidia.com:12051/dgx/bmc/nsmd.git;protocol=ssh;branch=develop"
 SRCREV = "5bfa384101d9dc05867779a99b398c602067a9b2"
@@ -338,7 +341,7 @@ SYSTEMD_SERVICE:${PN} = "nsmd.service"
 FILES:${PN}:append = " ${datadir}/libnsm/instance-db/default"
 ```
 
-All the above dependencies are mandatory except nvidia-tal.
+All the above dependencies are mandatory except nvidia-tal. Some more meson options which can be configured are defined below with there defualt values.
 For nv-tal reference : https://github.com/NVIDIA/nvidia-tal
 For nv-shmem reference : https://github.com/NVIDIA/nv-shmem
 
@@ -354,17 +357,29 @@ For nv-shmem reference : https://github.com/NVIDIA/nv-shmem
 | `sensor-polling-time-long-running`   | `integer`  | `1499`            | Specifies the interval time of sensor polling for NSM long-running requests in milliseconds.                                      |
 | `mockup-responder`                   | `feature`  | `enabled`         | Enables a mockup responder for testing or simulation purposes.                                                                    |
 | `instance-id-expiration-interval`    | `integer`  | `5`               | Specifies how often NSM instance IDs expire in seconds.                                                                           |
-| `instance-id-expiration-interval-long-running` | `integer` | `10`        | Specifies how often NSM instance IDs expire for long-running requests in seconds.                                                 |
+| `instance-id-expiration-interval-long-running`    | `integer` | `10`  | Specifies how often NSM instance IDs expire for long-running requests in seconds.                                                 |
 | `number-of-request-retries`          | `integer`  | `2`               | Specifies the number of retries for NSM requests before failing.                                                                  |
 | `response-time-out`                  | `integer`  | `2000`            | Specifies the timeout interval for NSM responses in milliseconds.                                                                 |
 | `response-time-out-long-running`     | `integer`  | `3000`            | Specifies the timeout interval for NSM responses during long-running requests in milliseconds.                                    |
-| `local-eid`                          | `integer`  | `9`               | Specifies the default local EID (Endpoint Identifier) for local communication.                                                    |
+| `local-eid`                          | `integer`  | `254`             | Specifies the default local EID (Endpoint Identifier) for local communication.                                                    |
 | `aer-error-status-priority`          | `boolean`  | `false`           | Specifies whether to prioritize Aer Error Status Sensors.                                                                         |
 | `per-lan-error-count-priority`       | `boolean`  | `false`           | Specifies whether to prioritize Per Lane Error Count Sensors.                                                                     |
 | `error-injection-priority`           | `boolean`  | `false`           | Specifies whether to prioritize Error Injection during error testing or handling.                                                 |
 
 
-Bitbake changes to include all configurations in entity manager
+**Bitbake changes to include all configurations in entity manager**
+
+In the below changes hgxb_instance_mapping.json is optional. It should only be used in scenario where
+Instance id received in query device identification cmd in NSM did not had expected values for GPUs from hardware.
+
+So with this file we get the ability to update device instanceID via EM json configuration based on either of below mentioned fields.
+- Instance ID [received from queryDeviceIdentification cmd]
+- EID
+- UUID
+
+Priority is given in above order.
+
+If its single gpu or N gpu system where device instanceID's are aligned with expectation from hardware we can skip use of this file.
 
 ```
 FILESEXTRAPATHS:append := "${THISDIR}/files:"
@@ -379,7 +394,7 @@ SRCREV = "1cfa102bdb0435ade263b3805a2cf3457a054f10"
 SRC_URI:append = "
                    file://hgxb_gpu_chassis.json \
                    file://hgxb_static_inventory.json \
-                   file://hgxb_instance_mapping.json \
+                   file://hgxb_instance_mapping.json \  #optional
                  "
 
 RDEPENDS:${PN} = " \
@@ -392,6 +407,8 @@ do_install:append() {
 
      install -m 0444 ${WORKDIR}/hgxb_gpu_chassis.json ${D}/usr/share/entity-manager/configurations
      install -m 0444 ${WORKDIR}/hgxb_static_inventory.json ${D}/usr/share/entity-manager/configurations
+
+     # optional
      install -m 0444 ${WORKDIR}/hgxb_instance_mapping.json ${D}/usr/share/entity-manager/configurations
 }
 
@@ -404,7 +421,7 @@ NSM supports static inventory creation. Static inventory means that inventory ob
 
 The properties of PDIs will be initialized to default value and they should  be updated to correct value once the device shows up on MCTP network(e.g. power on).
 
-What inventory object should be created by nsmd can be configurable by EM json file and whether inventory is static or dynamic is also configured through EM json file or by “probe” property of EM json with more specific.
+The type of inventory object that nsmd should create can be configured through the Entity Manager (EM) JSON file. Additionally, whether the inventory is static or dynamic can also be determined either by settings in the EM JSON file or by using the “probe” property in the EM configuration for more specific control.
 
 For static Inventory, the EM json probe rule should not be the condition depending on if EID enumerated or not. And the UUID property of every config PDIs should be in the format, “DEVICE_TYPE=X:INSTANCE_ID=Y” for nsmd to match the config PDI to correct nsmDevice when the device is enumerated.
 
@@ -418,7 +435,7 @@ e.g.
 {
     "Exposes": [],
     "Name": "NSM_DEV_GPU_0",
-    "Probe": <Match something from the B40 FRU EEPROM>,
+    "Probe": "TRUE",
     "Type": "NSM_Configs",
     "xyz.openbmc_project.NsmDevice": {
         "DEVICE_TYPE": 0,
@@ -472,9 +489,12 @@ Here we are creating configuration pdi related to gpu chassis to be consumed by 
 
 ##### GPU INDEX MAPPING CONFIG FILE
 
+hgxb_instance_mapping.json inclusion is optional. It should only be used in scenario where
+Instance id received in query device identification cmd in NSM did not had expected values for GPUs from hardware.
+
 https://github.com/NVIDIA/openbmc/blob/develop/meta-nvidia/meta-prime/meta-graceblackwell/meta-gb200nvl/meta-hmc/recipes-phosphor/configuration/entity-manager/files/gb200nvl_instance_mapping.json
 
-Adding support to have ability to update device instanceID via EM json configuration based on either of below mentioned fields.
+It add support to have ability to update device instanceID via EM json configuration based on either of below mentioned fields.
 1. Instance ID [received from queryDeviceIdentification cmd]
 2. EID
 3. UUID
@@ -649,7 +669,7 @@ root@hgxb:/usr/share/entity-manager/configurations# busctl tree xyz.openbmc_proj
 
 #### FULL BLACKWELL GPU CONFIG
 
-- SINGLE GPU
+- SINGLE GPU config ( hgxb_gpu_chassis.json )
 
 ```
 [
@@ -737,7 +757,7 @@ root@hgxb:/usr/share/entity-manager/configurations# busctl tree xyz.openbmc_proj
 
 ```
 
-- N GPU
+- N GPU config ( hgxb_gpu_chassis.jso )
 
 For N GPU config we will be dependent on instance number. Its already defined in GPU INDEX MAPPING CONFIG FILE section above.
 Here is the example below for full config for N gpu.
