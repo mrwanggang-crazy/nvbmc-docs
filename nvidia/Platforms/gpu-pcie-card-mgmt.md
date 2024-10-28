@@ -1,16 +1,14 @@
 # Nvidia GPU PCIe card management via NvBMC
-This document describes how to use NvBMC on a platform BMC to manager Nvidia GPU
-PCIe card. This applies to the following GPUs:
-1) B40 (Blackwell)
+This document describes how to use NvBMC (Nvidia OpenBMC stack) on a platform
+BMC to manage an Nvidia GPU PCIe card.
 
 ## Management overview
 The following tables lists OOB mamagement features that a platform BMC may
-implement to manage B40. It also shows OpenBMC/NvBMC services that provide the
-feature.
+implement to manage an Nvidia GPU PCIe card. It also shows OpenBMC/NvBMC
+services that provide the manageability feature.
 
 | Feature               | Protocol              | Transport | NvBMC/OpenBMC repo                                                  |
 | --------------------- | --------------------- | --------- | ------------------------------------------------------------------- |
-| Inventory             | IPMI FRU EEPROM       | I2C       | [OpenBMC entity-manager](https://github.com/openbmc/entity-manager) |
 | Enumeration           | MCTP                  | USB       | [NvBMC libmctp](https://github.com/NVIDIA/libmctp)                  |
 | Telemetry             | NSM over MCTP         | USB       | [NvBMC nsmd](https://github.com/NVIDIA/nsmd)                        |
 | Firmware Update       | PLDM Type 5 over MCTP | USB       | [NvBMC pldm](https://github.com/NVIDIA/pldm)                        |
@@ -21,30 +19,16 @@ feature.
 NvBMC is based on OpenBMC and the services listed below will have
 dependecies on other OpenBMC repos - those are not listed above and can be
 determined by looking at the bitbake recipe of the service. A key such
-repository is [phosphor-dbus-interfaces]() - this repo may contain interfaces that
+repository is phosphor-dbus-interfaces - this repo may contain interfaces that
 don't exist is upstream OpenBMC.
 
-## Single GPU service enablement
+## Platform enablement
 This section describes how to enable/configure NvBMC/OpenBMC services for
 various OOB features.
 
-### Inventory
-Use upstream [OpenBMC entity-manager](https://github.com/openbmc/entity-manager)
-to read and recognize the GPU via I2C FRU EEPROM.
-
-#### Step1: Write bitbake recipe
-
-#### Step2: Write Configuration Files
-```
-B40 IPMI FRU EEPROM I2C address: 0x50 (7-bit), 0xA0 (8-bit)
-Entity-manager PROBE statement:
-```
-
-#### Step3: Check expected D-Bus tree
-
 ### Enumeration
 [NvBMC libmctp](https://github.com/NVIDIA/libmctp) can disover the GPU as an
-MCTP USB endpoint as well as to perform MCTP Tx/Rx.
+MCTP USB endpoint as well as perform MCTP Tx/Rx.
 
 #### Step1: Write bitbake recipe
 
@@ -1675,71 +1659,205 @@ root@hgxb:~# busctl tree xyz.openbmc_project.NSM
         `- /xyz/openbmc_project/sensors/voltage/HGX_GPU_SXM_1_Voltage_0
 ```
 
-[xyz.openbmc_project.Association.Definitions]()
-[xyz.openbmc_project.Common.UUID]()
-[xyz.openbmc_project.Configuration.NsmDeviceAssociation]()
-[xyz.openbmc_project.Control.Mode]()
-[xyz.openbmc_project.Control.Power.Cap]()
-[xyz.openbmc_project.Control.Power.Mode]()
-[xyz.openbmc_project.Control.Processor.Reset]()
-[xyz.openbmc_project.FruDevice]()
-[xyz.openbmc_project.Inventory.Decorator.Area]()
-[xyz.openbmc_project.Inventory.Decorator.Asset]()
-[xyz.openbmc_project.Inventory.Decorator.Dimension]()
-[xyz.openbmc_project.Inventory.Decorator.FpgaType]()
-[xyz.openbmc_project.Inventory.Decorator.Location]()
-[xyz.openbmc_project.Inventory.Decorator.LocationCode]()
-[xyz.openbmc_project.Inventory.Decorator.PCIeRefClock]()
-[xyz.openbmc_project.Inventory.Decorator.PortInfo]()
-[xyz.openbmc_project.Inventory.Decorator.PortState]()
-[xyz.openbmc_project.Inventory.Decorator.PortWidth]()
-[xyz.openbmc_project.Inventory.Decorator.PowerLimit]()
-[xyz.openbmc_project.Inventory.Decorator.Revision]()
-[xyz.openbmc_project.Inventory.Item]()
-[xyz.openbmc_project.Inventory.Item.Accelerator]()
-[xyz.openbmc_project.Inventory.Item.Assembly]()
-[xyz.openbmc_project.Inventory.Item.Chassis]()
-[xyz.openbmc_project.Inventory.Item.Cpu.OperatingConfig]()
-[xyz.openbmc_project.Inventory.Item.Dimm]()
-[xyz.openbmc_project.Inventory.Item.Dimm.MemoryMetrics]()
-[xyz.openbmc_project.Inventory.Item.Endpoint]()
-[xyz.openbmc_project.Inventory.Item.Fabric]()
-[xyz.openbmc_project.Inventory.Item.NetworkInterface]()
-[xyz.openbmc_project.Inventory.Item.PCIeDevice]()
-[xyz.openbmc_project.Inventory.Item.PCIeSlot]()
-[xyz.openbmc_project.Inventory.Item.PersistentMemory]()
-[xyz.openbmc_project.Inventory.Item.Port]()
-[xyz.openbmc_project.Inventory.Item.Switch]()
-[xyz.openbmc_project.Inventory.Item.Zone]()
-[xyz.openbmc_project.MCTP.UUID]()
-[xyz.openbmc_project.Memory.MemoryECC]()
-[xyz.openbmc_project.Metrics.IBPort]()
-[xyz.openbmc_project.Metrics.PortMetricsOem2]()
-[xyz.openbmc_project.Metrics.PortMetricsOem3]()
-[xyz.openbmc_project.PCIe.LTSSMState]()
-[xyz.openbmc_project.PCIe.PCIeECC]()
-[xyz.openbmc_project.Sensor.Threshold.Critical]()
-[xyz.openbmc_project.Sensor.Threshold.HardShutdown]()
-[xyz.openbmc_project.Sensor.Threshold.Warning]()
-[xyz.openbmc_project.Sensor.Type]()
-[xyz.openbmc_project.Sensor.Value]()
-[xyz.openbmc_project.Software.Settings]()
-[xyz.openbmc_project.Software.Version]()
-[xyz.openbmc_project.State.Chassis]()
-[xyz.openbmc_project.State.Decorator.Health]()
-[xyz.openbmc_project.State.Decorator.OperationalStatus]()
-[xyz.openbmc_project.State.ProcessorPerformance]()
-[xyz.openbmc_project.State.ServiceReady]()
-[xyz.openbmc_project.Time.EpochTime]()
-[com.nvidia.Common.ClearPowerCap]()
-[com.nvidia.Edpp]()
-[com.nvidia.GPMMetrics]()
-[com.nvidia.InbandReconfigSettings]()
-[com.nvidia.MemoryRowRemapping]()
-[com.nvidia.MigMode]()
-[com.nvidia.NVLink.NVLinkMetrics]()
-[com.nvidia.NVLink.NVLinkRefClock]()
+#### NV-Shmem Integration
 
-#### References
-- [Bitbake Recipe]()
-- [Single GPU configuration]()
+#### nv-shmem library 
+
+Shared memory sensor repository acts like a cache for bmweb where all the sensor
+data and metric values required to prepare the response for MRD requests are
+readily available. The repository is periodically updated by the sensor
+aggregator library which gets the data from individual sensor producers. Sensor
+producers will use shared memory APIs to insert and update the MRD values.This
+brings in significant reduction in processing time of MRD requests in bmcweb
+which will help to improve the SLAs.
+
+
+##### Configuration Json
+
+- shm_mapping.json: Modify this file based on the namespaces supported and
+  producers for this platform. Refer
+  [Shared memory mapping json](#shared-memory-mapping-json) section for more
+  details.
+
+- shm_namespace_config.json: Update only if there are additional platform
+  specific properties. If those properties are not applicable for all platforms
+  use bbappend file to add this file to specific platform. Refer
+  [Configuration json for metric property mapping](#configuration-json-for-metric-property-mapping)
+  section for more details.
+
+##### Recipe Changes
+
+- In platform `obmc-phosphor-image.bbappend` file, add `nvidia-shmem` to
+  `OBMC_IMAGE_EXTRA_INSTALL:append` section
+- In BMCWeb bbappend file add `nvidia-shmem` dependency and enable
+  `shmem-platform-metrics`
+
+  ```
+  EXTRA_OEMESON:append = " -Dshmem-platform-metrics=enabled "
+
+  DEPENDS:append = " nvidia-shmem"
+  ```
+
+- In `nvidia-shmem` bbappend file add `platform-system-id` and
+  `platform-system-id` based on platform id.
+
+  Example:
+
+  ```
+  EXTRA_OEMESON:append = " -Dplatform-system-id=HGX_Baseboard_0"
+  EXTRA_OEMESON:append = " -Dplatform-device-prefix=HGX_"
+  ```
+
+- If `shm_mapping.json` and `shm_namespace_config.json` has changes add those
+  files to the image.
+
+  Example:
+
+  ```
+  # Add platform specific shared memory mapping file
+  FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+  SRC_URI:append = " file://shm_mapping.json"
+  do_install:append() {
+      install -m 0644 ${WORKDIR}/shm_mapping.json ${D}${datadir}/nvshmem
+  }
+  ```
+
+##### Configuration json for metric property mapping
+
+There would be a configuration file which maps MRD namespace to all the shared
+memory namespaces exposed by each of the sensor provider services.
+`SensorNamespaces` key contains rules for each of the sensor namespace which is
+combination of `Namespace`, `ObjectpathKeywords` and `PropertyList`.
+
+Note: By default `shm_namespace_config.json` file present in configurations
+directory will be used. Override this file in your platform recipe file based on
+the requirement.
+
+If you need to add new property to existing metric
+
+- Identify the namespace
+- Verify the object path and add if new object paths is necessary
+- Update Property in the identfied section
+
+If you need to add a new namespace
+
+- Update namespace and size in [shm_mapping.json](#shared-memory-mapping-json)
+  file
+- Add a new entry in `shm_namespace_config.json` file with namespace, object
+  path keyword and property details
+
+An example of this configuration file is given below.
+
+```ascii
+{
+    "SensorNamespaces": [
+        {
+            "Namespace": "NVSwitchPortMetrics",
+            "ObjectpathKeywords": "Switches/Ports",
+            "PropertyList": [
+                "CurrentSpeed",
+                "LinkStatus",
+                "MaxSpeed",
+                "RXBytes",
+                "TXBytes",
+                "RXErrors",
+                "TXPkts",
+                "RXPkts",
+                "RXMulticastPkts",
+                "RXUnicastPkts",
+                "TXUnicastPkts",
+                "TXMulticastPkts",
+                "TXDiscardPkts",
+                "MalformedPkts",
+                "VL15DroppedPkts",
+                "MTUDiscard",
+                "SymbolError",
+                "LinkErrorRecoveryCounter",
+                "LinkDownCount",
+                "RXRemotePhysicalErrorPkts",
+                "RXSwitchRelayErrorPkts",
+                "QP1DroppedPkts",
+                "TXWait"
+            ]
+        }
+    ]
+}
+
+```
+
+##### Shared memory mapping json
+
+This file will have updating producer names for all the sensor namespaces. For
+each namespace
+
+- `Producers` key will contain list of processes which updates shared memory for
+  the given namespace.
+- Shared memory size should be specified in bytes with field `SizeInBytes`
+
+Note: By default `shm_mapping.json` file present in configurations directory
+will be used. Override this file in your platform recipe file based on the
+requirement.
+
+SizeInBytes is currently defined as below. The calculation is based on used size
+in HGX platform for each of the metrics namespaces.
+
+Used size is calculated using `managed_shared_memory.get_free_memory()` api.
+Based on the used size it's adjusted to it's near 2's power value in bytes.
+
+| Namespace                        | Size in system KB | Allocated size |
+| -------------------------------- | ----------------- | -------------- |
+| MemoryMetrics_0              | 46.1328125        | 128 KB         |
+| NVSwitchMetrics_0            | 40.4453125        | 128 KB         |
+| NVSwitchPortMetrics_0        | 894.4765625       | 1024 KB        |
+| PlatformEnvironmentMetrics_0 | 55.921875         | 128 KB         |
+| ProcessorGPMMetrics_0        | 138.0234375       | 256 KB         |
+| ProcessorMetrics_0           | 103.2734375       | 256 KB         |
+| ProcessorPortGPMMetrics_0    | 267.203125        | 512 KB         |
+| ProcessorPortMetrics_0       | 829.7265625       | 1024 KB        |
+
+An example of this namespace mapping is given below.
+
+```
+{
+    "Namespaces": {
+        "NVSwitchPortMetrics": {
+            "Producers": ["pldmd", "nsmd"],
+            "SizeInBytes": 1331200
+        }
+    }
+}
+
+```
+##### Size Calculation
+
+Size calculation is done by having the size for the one key then we use that key size for the number of available device point s in the device and multiply it with the size.
+
+For one key calculation we can use the following
+
+| General size                     | Size in system KB |
+|----------------------------------|-------------------|
+| Ref String size	                 |      126          |
+| Sensor Key	                     |      126          |
+| TimeStampStr	                   |      30           |
+| Sensor Value	                   |       8           |
+| TimeStamp Int	                   |       4           |
+| Total	                           |      294          |
+
+Sample calculation for the namespace
+
+##### Device Properties Allocation
+
+| Namespace | Device count | Ports per device | Properties per port | Total properties | Required size (bytes) | 10% buffer | Allocated size (bytes) | Allocated size (KB) | Rounded size (KB) |
+|-----------|--------------|------------------|---------------------|------------------|----------------------|------------|------------------------|---------------------|-------------------|
+| Namespace | Device count | Number of ports per device | Property per port | Total count of properties | Required Size | 10% buffer | Allocate size | Allocate size / 1024 | Round off allocate size |
+
+##### Calculation Details
+
+- **Total properties** = Device count * Ports per device * Properties per port
+- **Required size** = Total properties * Size for each property
+- **10% buffer** is added to the required size for future expansion
+- **Allocated size** = Required size + 10% buffer
+- **Allocated size (KB)** = Allocated size (bytes) / 1024
+- **Rounded size** is the final allocation, rounded up to the nearest KB
+
+This table provides an overview of the device property allocation, including the namespace, device specifications, and memory requirements. The calculation details explain how each value is derived, ensuring transparency in the allocation process.												
