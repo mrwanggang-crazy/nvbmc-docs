@@ -1861,3 +1861,8 @@ Sample calculation for the namespace
 - **Rounded size** is the final allocation, rounded up to the nearest KB
 
 This table provides an overview of the device property allocation, including the namespace, device specifications, and memory requirements. The calculation details explain how each value is derived, ensuring transparency in the allocation process.												
+
+
+### SPDM and PLDM Type 5 enablement
+See https://github.com/NVIDIA/nvbmc-docs/blob/develop/nvidia/Attestation/spdmd.md and
+https://github.com/NVIDIA/nvbmc-docs/blob/develop/nvidia/FW-Update/fw_update_platform_guide.md.
